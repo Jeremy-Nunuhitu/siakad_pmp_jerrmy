@@ -1,0 +1,64 @@
+import '../models/siakad_models.dart';
+import '../services/mock_service.dart';
+import 'base_list_viewmodel.dart';
+
+class MahasiswaViewModel extends BaseListViewModel {
+  MahasiswaViewModel(this._service);
+
+  final MockService _service;
+
+  List<Mahasiswa> items({String? prodiId}) {
+    // Daftar mahasiswa bisa difilter per prodi sesuai scope operator.
+    return _service.mahasiswa
+        .where((item) => prodiId == null || item.prodiId == prodiId)
+        .toList();
+  }
+
+  Mahasiswa? byNim(String nim) {
+    // Dipakai halaman detail/form untuk mengambil satu mahasiswa dari NIM.
+    for (final item in _service.mahasiswa) {
+      if (item.nim == nim) return item;
+    }
+    return null;
+  }
+
+  void add(String nim, String nama, String jenisKelamin, String prodiId) {
+    // Input dari form dikirim ke service, lalu UI mendapat pesan hasil aksi.
+    runAction(() => _service.addMahasiswa(nim, nama, jenisKelamin, prodiId));
+  }
+
+  void update(String nim, String nama, String jenisKelamin, String prodiId) {
+    runAction(
+      () => _service.updateMahasiswa(
+        nim: nim,
+        nama: nama,
+        jenisKelamin: jenisKelamin,
+        prodiId: prodiId,
+      ),
+    );
+  }
+
+  void updateProfile({
+    required String nim,
+    required String jenisKelamin,
+    required int semester,
+    required String email,
+    required String noHp,
+    required String alamat,
+  }) {
+    runAction(
+      () => _service.updateProfilMahasiswa(
+        nim: nim,
+        jenisKelamin: jenisKelamin,
+        semester: semester,
+        email: email,
+        noHp: noHp,
+        alamat: alamat,
+      ),
+    );
+  }
+
+  void delete(String nim) {
+    runAction(() => _service.deleteMahasiswa(nim));
+  }
+}
