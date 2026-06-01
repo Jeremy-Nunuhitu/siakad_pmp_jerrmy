@@ -15,7 +15,8 @@ class KelasViewModel extends BaseListViewModel {
         (item) => item.kode == kelas.mataKuliahId,
       );
       final matchProdi = prodiId == null || mk.prodiId == prodiId;
-      final matchDosen = dosenId == null || kelas.dosenId == dosenId;
+      final matchDosen =
+          dosenId == null || _service.isDosenMengajarKelas(dosenId, kelas.id);
       return matchProdi && matchDosen;
     }).toList();
   }

@@ -26,4 +26,12 @@ class KRSViewModel extends BaseListViewModel {
   void validate(String krsId, String dosenId) {
     runAction(() => _service.validateKrs(krsId, dosenId));
   }
+
+  void reject(String krsId, String dosenId, String catatan) {
+    runAction(() => _service.rejectKrs(krsId, dosenId, catatan));
+  }
+
+  void remove(String krsId, String mahasiswaId) {
+    runAction(() => _service.removeKrs(krsId, mahasiswaId));
+  }
 }

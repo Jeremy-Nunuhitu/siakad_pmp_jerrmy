@@ -130,7 +130,7 @@ class PdfService {
                         ? service.getMataKuliahName(kelas.mataKuliahId)
                         : '-';
                     final dosenName = kelas.dosenId.isNotEmpty
-                        ? service.getDosenName(kelas.dosenId)
+                        ? service.getDosenPengajarNames(kelas.id)
                         : '-';
                     final mk = service.mataKuliah.firstWhere(
                       (m) => m.kode == kelas.mataKuliahId,
@@ -149,7 +149,9 @@ class PdfService {
                         _tableCell('${i + 1}', center: true),
                         _tableCell(mkName),
                         _tableCell(dosenName),
-                        _tableCell('${kelas.hari}, ${kelas.jam}'),
+                        _tableCell(
+                          '${kelas.hari}, ${kelas.jam}\n${service.getRuanganName(kelas.ruangan)}',
+                        ),
                         _tableCell('${mk.sks}', center: true),
                       ],
                     );
@@ -485,7 +487,7 @@ class PdfService {
   }) async {
     final kelas = service.kelas.firstWhere((item) => item.id == kelasId);
     final mkName = service.getMataKuliahName(kelas.mataKuliahId);
-    final dosenName = service.getDosenName(kelas.dosenId);
+    final dosenName = service.getDosenPengajarNames(kelas.id);
     final peserta = service.krs
         .where((item) => item.kelasId == kelasId)
         .toList();
@@ -526,7 +528,10 @@ class PdfService {
           pw.SizedBox(height: 16),
           _infoRow('Mata Kuliah', mkName),
           _infoRow('Dosen', dosenName),
-          _infoRow('Jadwal', '${kelas.hari}, ${kelas.jam} - ${kelas.ruangan}'),
+          _infoRow(
+            'Jadwal',
+            '${kelas.hari}, ${kelas.jam} - ${service.getRuanganName(kelas.ruangan)}',
+          ),
           pw.SizedBox(height: 14),
           pw.Table(
             border: pw.TableBorder.all(color: PdfColors.grey400),

@@ -11,6 +11,7 @@ import 'viewmodels/mahasiswa_viewmodel.dart';
 import 'viewmodels/mata_kuliah_viewmodel.dart';
 import 'viewmodels/nilai_viewmodel.dart';
 import 'viewmodels/prodi_viewmodel.dart';
+import 'viewmodels/ruangan_viewmodel.dart';
 import 'viewmodels/theme_viewmodel.dart';
 import 'views/splash_view.dart';
 
@@ -40,6 +41,7 @@ class SiakadApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => MahasiswaViewModel(service)),
         ChangeNotifierProvider(create: (_) => DosenViewModel(service)),
         ChangeNotifierProvider(create: (_) => MataKuliahViewModel(service)),
+        ChangeNotifierProvider(create: (_) => RuanganViewModel(service)),
         ChangeNotifierProvider(create: (_) => KelasViewModel(service)),
         ChangeNotifierProvider(create: (_) => KRSViewModel(service)),
         ChangeNotifierProvider(create: (_) => NilaiViewModel(service)),

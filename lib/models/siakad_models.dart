@@ -181,7 +181,68 @@ class Kelas {
   final int kapasitas;
   final String hari;
   final String jam;
+  // Field ini menyimpan kode ruangan. Nama/lokasi ruangan dibaca dari model
+  // Ruangan agar kelas bisa divalidasi terhadap kapasitas dan bentrok jadwal.
   final String ruangan;
+}
+
+class Ruangan {
+  const Ruangan({
+    required this.kodeRuangan,
+    required this.namaRuangan,
+    required this.kapasitasRuangan,
+    required this.lokasi,
+  });
+
+  final String kodeRuangan;
+  final String namaRuangan;
+  final int kapasitasRuangan;
+  final String lokasi;
+
+  Ruangan copyWith({
+    String? kodeRuangan,
+    String? namaRuangan,
+    int? kapasitasRuangan,
+    String? lokasi,
+  }) {
+    return Ruangan(
+      kodeRuangan: kodeRuangan ?? this.kodeRuangan,
+      namaRuangan: namaRuangan ?? this.namaRuangan,
+      kapasitasRuangan: kapasitasRuangan ?? this.kapasitasRuangan,
+      lokasi: lokasi ?? this.lokasi,
+    );
+  }
+}
+
+class DosenPengajar {
+  const DosenPengajar({
+    required this.id,
+    required this.idKelas,
+    required this.nidnDosen,
+    this.peranMengajar = 'Dosen Utama',
+  });
+
+  final String id;
+  final String idKelas;
+  final String nidnDosen;
+  final String peranMengajar;
+}
+
+enum KrsStatus { draft, diajukan, disetujui, ditolak }
+
+extension KrsStatusLabel on KrsStatus {
+  String get label {
+    switch (this) {
+      case KrsStatus.draft:
+        return 'Draft';
+      case KrsStatus.diajukan:
+        return 'Diajukan';
+      case KrsStatus.disetujui:
+        return 'Disetujui';
+      case KrsStatus.ditolak:
+        return 'Ditolak';
+    }
+  }
 }
 
 class KRS {
@@ -192,6 +253,8 @@ class KRS {
     this.semester = 1,
     this.isSubmitted = false,
     this.isValidated = false,
+    this.isRejected = false,
+    this.catatanDosenPa = '',
   });
 
   final String id;
@@ -202,6 +265,17 @@ class KRS {
   final int semester;
   final bool isSubmitted;
   final bool isValidated;
+  final bool isRejected;
+  final String catatanDosenPa;
+
+  KrsStatus get status {
+    if (isValidated) return KrsStatus.disetujui;
+    if (isRejected) return KrsStatus.ditolak;
+    if (isSubmitted) return KrsStatus.diajukan;
+    return KrsStatus.draft;
+  }
+
+  String get statusLabel => status.label;
 
   KRS copyWith({
     String? id,
@@ -210,6 +284,8 @@ class KRS {
     int? semester,
     bool? isSubmitted,
     bool? isValidated,
+    bool? isRejected,
+    String? catatanDosenPa,
   }) {
     return KRS(
       id: id ?? this.id,
@@ -218,6 +294,8 @@ class KRS {
       semester: semester ?? this.semester,
       isSubmitted: isSubmitted ?? this.isSubmitted,
       isValidated: isValidated ?? this.isValidated,
+      isRejected: isRejected ?? this.isRejected,
+      catatanDosenPa: catatanDosenPa ?? this.catatanDosenPa,
     );
   }
 }

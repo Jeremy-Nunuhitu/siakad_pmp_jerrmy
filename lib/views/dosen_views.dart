@@ -176,7 +176,7 @@ class DosenDashboardView extends StatelessWidget {
                           icon: Icons.schedule_rounded,
                           title: service.getMataKuliahName(item.mataKuliahId),
                           subtitle: '${item.hari}, ${item.jam}',
-                          trailing: item.ruangan,
+                          trailing: service.getRuanganName(item.ruangan),
                         ),
                     ],
                   ),
@@ -858,7 +858,7 @@ class DosenKelasView extends StatelessWidget {
                   icon: Icons.class_outlined,
                   title: service.getMataKuliahName(kelas[i].mataKuliahId),
                   subtitle:
-                      '${kelas[i].id} - ${kelas[i].hari}, ${kelas[i].jam}\n${kelas[i].ruangan}',
+                      '${kelas[i].id} - ${kelas[i].hari}, ${kelas[i].jam}\n${service.getRuanganName(kelas[i].ruangan)}',
                   trailing: const Icon(Icons.chevron_right),
                 ),
               ),
@@ -890,7 +890,8 @@ class DosenNilaiView extends StatelessWidget {
               child: InfoTile(
                 icon: Icons.assignment_outlined,
                 title: service.getMataKuliahName(kelas[i].mataKuliahId),
-                subtitle: 'ID Kelas: ${kelas[i].id}',
+                subtitle:
+                    'ID Kelas: ${kelas[i].id}\n${kelas[i].hari}, ${kelas[i].jam} - ${service.getRuanganName(kelas[i].ruangan)}',
                 onTap: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
@@ -1079,12 +1080,12 @@ class DosenKrsValidationView extends StatelessWidget {
             .where(
               (item) =>
                   mahasiswaBimbingan.contains(item.mahasiswaId) &&
-                  item.isSubmitted,
+                  (item.isSubmitted || item.isValidated || item.isRejected),
             )
             .toList()
           ..sort((a, b) {
-            if (a.isValidated != b.isValidated) {
-              return a.isValidated ? 1 : -1;
+            if (a.status != b.status) {
+              return a.status.index.compareTo(b.status.index);
             }
             return b.semester.compareTo(a.semester);
           });
@@ -1112,23 +1113,39 @@ class DosenKrsValidationView extends StatelessWidget {
                       (item) => item.id == krs.kelasId,
                     );
                     return InfoTile(
-                      icon: krs.isValidated
-                          ? Icons.verified_rounded
-                          : Icons.pending_actions_rounded,
+                      icon: switch (krs.status) {
+                        KrsStatus.disetujui => Icons.verified_rounded,
+                        KrsStatus.ditolak => Icons.cancel_outlined,
+                        KrsStatus.diajukan => Icons.pending_actions_rounded,
+                        KrsStatus.draft => Icons.edit_note_outlined,
+                      },
                       title: service.getMahasiswaName(krs.mahasiswaId),
                       subtitle:
-                          '${service.getMataKuliahName(kelas.mataKuliahId)}\nNIM: ${krs.mahasiswaId} - Semester ${krs.semester}\nDosen pengampu: ${service.getDosenName(kelas.dosenId)}',
-                      trailing: krs.isValidated
-                          ? const Text(
-                              'Disetujui',
+                          '${service.getMataKuliahName(kelas.mataKuliahId)}\nNIM: ${krs.mahasiswaId} - Semester ${krs.semester}\nDosen pengajar: ${service.getDosenPengajarNames(kelas.id)}\nRuangan: ${service.getRuanganName(kelas.ruangan)}${krs.catatanDosenPa.isEmpty ? '' : '\nCatatan: ${krs.catatanDosenPa}'}',
+                      trailing: krs.isValidated || krs.isRejected
+                          ? Text(
+                              krs.statusLabel,
                               style: TextStyle(fontWeight: FontWeight.w900),
                             )
-                          : FilledButton(
-                              onPressed: () {
-                                krsVm.validate(krs.id, dosenId);
-                                showAppMessage(context, krsVm.message);
+                          : PopupMenuButton<String>(
+                              onSelected: (value) {
+                                if (value == 'approve') {
+                                  krsVm.validate(krs.id, dosenId);
+                                  showAppMessage(context, krsVm.message);
+                                  return;
+                                }
+                                _showRejectKrsDialog(context, krs.id, krsVm);
                               },
-                              child: const Text('Setujui'),
+                              itemBuilder: (context) => const [
+                                PopupMenuItem(
+                                  value: 'approve',
+                                  child: Text('Setujui KRS'),
+                                ),
+                                PopupMenuItem(
+                                  value: 'reject',
+                                  child: Text('Tolak dengan Catatan'),
+                                ),
+                              ],
                             ),
                     );
                   },
@@ -1137,6 +1154,46 @@ class DosenKrsValidationView extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _showRejectKrsDialog(
+    BuildContext context,
+    String krsId,
+    KRSViewModel krsVm,
+  ) async {
+    final controller = TextEditingController();
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Tolak KRS'),
+          content: TextField(
+            controller: controller,
+            decoration: const InputDecoration(
+              labelText: 'Catatan untuk mahasiswa',
+            ),
+            maxLines: 3,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Batal'),
+            ),
+            FilledButton(
+              onPressed: () {
+                krsVm.reject(krsId, dosenId, controller.text);
+                showAppMessage(context, krsVm.message);
+                if ((krsVm.message ?? '').startsWith('KRS ditolak')) {
+                  Navigator.pop(dialogContext);
+                }
+              },
+              child: const Text('Tolak'),
+            ),
+          ],
+        );
+      },
+    );
+    controller.dispose();
   }
 }
 

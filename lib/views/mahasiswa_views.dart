@@ -127,7 +127,7 @@ class MahasiswaDashboardView extends StatelessWidget {
                 : _ClassSummary(
                     title: service.getMataKuliahName(nextClass.mataKuliahId),
                     time: '${nextClass.hari}, ${nextClass.jam}',
-                    room: nextClass.ruangan,
+                    room: service.getRuanganName(nextClass.ruangan),
                   ),
           ),
           const SizedBox(height: 16),
@@ -225,9 +225,9 @@ class MahasiswaDashboardView extends StatelessWidget {
                       for (final kelas in jadwalHariIni)
                         _ScheduleRow(
                           title: service.getMataKuliahName(kelas.mataKuliahId),
-                          lecturer: service.getDosenName(kelas.dosenId),
+                          lecturer: service.getDosenPengajarNames(kelas.id),
                           time: kelas.jam,
-                          room: kelas.ruangan,
+                          room: service.getRuanganName(kelas.ruangan),
                         ),
                     ],
                   ),
@@ -1425,18 +1425,32 @@ class _MahasiswaKrsViewState extends State<MahasiswaKrsView> {
     final selectedApproved =
         selectedHasKrs && selectedKrs.every((item) => item.isValidated);
     final selectedSubmitted =
-        selectedHasKrs && selectedKrs.every((item) => item.isSubmitted);
+        selectedHasKrs &&
+        selectedKrs.any((item) => item.isSubmitted && !item.isValidated);
+    final selectedRejected =
+        selectedHasKrs && selectedKrs.any((item) => item.isRejected);
     final selectedLocked =
         isCurrentSemester &&
         selectedKrs.any((item) => item.isSubmitted || item.isValidated);
-    final canSubmit = isCurrentSemester && selectedHasKrs && !selectedSubmitted;
+    final canSubmit =
+        isCurrentSemester &&
+        selectedHasKrs &&
+        !selectedSubmitted &&
+        !selectedApproved;
     final krsStatus = !selectedHasKrs
         ? 'Belum diisi'
         : selectedApproved
         ? 'Disetujui'
         : selectedSubmitted
         ? 'Diajukan'
+        : selectedRejected
+        ? 'Ditolak'
         : 'Draft';
+    final catatanDosenPa = selectedKrs
+        .where((item) => item.catatanDosenPa.isNotEmpty)
+        .map((item) => item.catatanDosenPa)
+        .toSet()
+        .join('\n');
     final availableKelas = service.kelas.where((kelas) {
       final mataKuliah = service.mataKuliah.firstWhere(
         (item) => item.kode == kelas.mataKuliahId,
@@ -1504,6 +1518,16 @@ class _MahasiswaKrsViewState extends State<MahasiswaKrsView> {
                           'Status: $krsStatus - Dosen PA: ${service.getDosenName(mahasiswa.pembimbingAkademikId)}',
                           style: const TextStyle(fontWeight: FontWeight.w800),
                         ),
+                        if (catatanDosenPa.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            'Catatan Dosen PA: $catatanDosenPa',
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.error,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -1589,11 +1613,12 @@ class _MahasiswaKrsViewState extends State<MahasiswaKrsView> {
                     );
                     final krsStatus = krsMatches.isEmpty
                         ? ''
-                        : krsMatches.first.isValidated
-                        ? 'Disetujui'
-                        : krsMatches.first.isSubmitted
-                        ? 'Diajukan'
-                        : 'Draft';
+                        : krsMatches.first.statusLabel;
+                    final canRemove =
+                        isCurrentSemester &&
+                        krsMatches.isNotEmpty &&
+                        !krsMatches.first.isSubmitted &&
+                        !krsMatches.first.isValidated;
 
                     return InfoTile(
                       icon: isSelected
@@ -1603,17 +1628,30 @@ class _MahasiswaKrsViewState extends State<MahasiswaKrsView> {
                                 : Icons.playlist_add_check),
                       title: service.getMataKuliahName(kelas.mataKuliahId),
                       subtitle:
-                          '${kelas.id} - ${service.getDosenName(kelas.dosenId)}\n${kelas.hari}, ${kelas.jam} - ${kelas.ruangan}\nKapasitas: $jumlahPeserta/${kelas.kapasitas}${isSelected ? '\nDiambil pada semester $krsSemester${krsStatus.isEmpty ? '' : ' - $krsStatus'}' : ''}',
+                          '${kelas.id}\nDosen: ${service.getDosenPengajarNames(kelas.id)}\n${kelas.hari}, ${kelas.jam} - ${service.getRuanganName(kelas.ruangan)}\nKapasitas: $jumlahPeserta/${kelas.kapasitas}${isSelected ? '\nDiambil pada semester $krsSemester${krsStatus.isEmpty ? '' : ' - $krsStatus'}${krsMatches.isNotEmpty && krsMatches.first.catatanDosenPa.isNotEmpty ? '\nCatatan: ${krsMatches.first.catatanDosenPa}' : ''}' : ''}',
                       trailing: !isCurrentSemester
                           ? const Text(
                               'History',
                               style: TextStyle(fontWeight: FontWeight.w900),
                             )
                           : isSelected
-                          ? const Text(
-                              'Diambil',
-                              style: TextStyle(fontWeight: FontWeight.w900),
-                            )
+                          ? canRemove
+                                ? OutlinedButton(
+                                    onPressed: () {
+                                      krsVm.remove(
+                                        krsMatches.first.id,
+                                        widget.mahasiswaId,
+                                      );
+                                      showAppMessage(context, krsVm.message);
+                                    },
+                                    child: const Text('Hapus'),
+                                  )
+                                : Text(
+                                    krsStatus.isEmpty ? 'Diambil' : krsStatus,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  )
                           : FilledButton(
                               onPressed: isFull || selectedLocked
                                   ? null
@@ -1729,7 +1767,7 @@ class _MahasiswaJadwalViewState extends State<MahasiswaJadwalView> {
                       icon: Icons.schedule_rounded,
                       title: service.getMataKuliahName(kelas.mataKuliahId),
                       subtitle:
-                          '${kelas.jam}\n${kelas.ruangan} - ${service.getDosenName(kelas.dosenId)}',
+                          '${kelas.jam}\n${service.getRuanganName(kelas.ruangan)} - ${service.getDosenPengajarNames(kelas.id)}',
                     );
                   },
                 ),
@@ -1866,7 +1904,7 @@ class _MahasiswaNilaiViewState extends State<MahasiswaNilaiView> {
                     return _DetailedGradeCard(
                       course: mk.nama,
                       sks: mk.sks,
-                      lecturer: service.getDosenName(kelas.dosenId),
+                      lecturer: service.getDosenPengajarNames(kelas.id),
                       nilai: item,
                     );
                   },

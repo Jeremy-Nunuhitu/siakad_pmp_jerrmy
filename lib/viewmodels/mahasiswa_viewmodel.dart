@@ -22,18 +22,39 @@ class MahasiswaViewModel extends BaseListViewModel {
     return null;
   }
 
-  void add(String nim, String nama, String jenisKelamin, String prodiId) {
+  void add(
+    String nim,
+    String nama,
+    String jenisKelamin,
+    String prodiId,
+    String pembimbingAkademikId,
+  ) {
     // Input dari form dikirim ke service, lalu UI mendapat pesan hasil aksi.
-    runAction(() => _service.addMahasiswa(nim, nama, jenisKelamin, prodiId));
+    runAction(
+      () => _service.addMahasiswa(
+        nim,
+        nama,
+        jenisKelamin,
+        prodiId,
+        pembimbingAkademikId,
+      ),
+    );
   }
 
-  void update(String nim, String nama, String jenisKelamin, String prodiId) {
+  void update(
+    String nim,
+    String nama,
+    String jenisKelamin,
+    String prodiId,
+    String pembimbingAkademikId,
+  ) {
     runAction(
       () => _service.updateMahasiswa(
         nim: nim,
         nama: nama,
         jenisKelamin: jenisKelamin,
         prodiId: prodiId,
+        pembimbingAkademikId: pembimbingAkademikId,
       ),
     );
   }

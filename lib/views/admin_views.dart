@@ -10,6 +10,7 @@ import '../viewmodels/kelas_viewmodel.dart';
 import '../viewmodels/mahasiswa_viewmodel.dart';
 import '../viewmodels/mata_kuliah_viewmodel.dart';
 import '../viewmodels/prodi_viewmodel.dart';
+import '../viewmodels/ruangan_viewmodel.dart';
 import '../widgets/animated_entrance.dart';
 import '../widgets/app_scaffold.dart';
 
@@ -245,6 +246,11 @@ class GlobalDataView extends StatelessWidget {
           _StatRow(label: 'Mahasiswa', value: '${service.mahasiswa.length}'),
           _StatRow(label: 'Dosen', value: '${service.dosen.length}'),
           _StatRow(label: 'Kelas Dibuka', value: '${service.kelas.length}'),
+          _StatRow(label: 'Ruangan', value: '${service.ruangan.length}'),
+          _StatRow(
+            label: 'Dosen Pengajar',
+            value: '${service.dosenPengajar.length}',
+          ),
         ],
       ),
     );
@@ -307,7 +313,7 @@ class ProdiCoreDataView extends StatelessWidget {
               icon: Icons.groups_outlined,
               title: item.nama,
               subtitle:
-                  '${item.nim} - ${item.jenisKelamin} - Prodi: ${item.prodiId}',
+                  '${item.nim} - ${item.jenisKelamin} - PA: ${context.read<MockService>().getDosenName(item.pembimbingAkademikId)}',
               trailing: _CrudMenu(
                 onEdit: () => _editMahasiswa(context, item),
                 onDelete: () => _deleteMahasiswa(context, item.nim),
@@ -367,109 +373,38 @@ class KelasManagementView extends StatelessWidget {
   Widget build(BuildContext context) {
     // Kelas dibuka oleh operator prodi dari kombinasi mata kuliah dan dosen.
     final kelasVm = context.watch<KelasViewModel>();
+    final ruanganVm = context.watch<RuanganViewModel>();
     final service = context.watch<MockService>();
     final kelas = kelasVm.items(prodiId: prodiId);
 
     return AppScaffold(
       title: 'Kelola Kelas',
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          final mataKuliahController = TextEditingController();
-          final dosenController = TextEditingController();
-          final kapasitasController = TextEditingController(text: '30');
-          final hariController = TextEditingController();
-          final jamController = TextEditingController();
-          final ruanganController = TextEditingController();
-
-          await showDialog<void>(
-            context: context,
-            builder: (context) {
-              return AlertDialog(
-                title: const Text('Buka Kelas'),
-                content: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TextField(
-                        controller: mataKuliahController,
-                        decoration: const InputDecoration(
-                          labelText: 'Kode Mata Kuliah (ex: IF401)',
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: dosenController,
-                        decoration: const InputDecoration(
-                          labelText: 'NIDN Dosen (ex: d-01)',
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: kapasitasController,
-                        decoration: const InputDecoration(
-                          labelText: 'Kapasitas Peserta',
-                        ),
-                        keyboardType: TextInputType.number,
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: hariController,
-                        decoration: const InputDecoration(
-                          labelText: 'Hari (ex: Senin)',
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: jamController,
-                        decoration: const InputDecoration(
-                          labelText: 'Jam (ex: 08.00 - 10.30)',
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: ruanganController,
-                        decoration: const InputDecoration(
-                          labelText: 'Ruangan (ex: Lab Mobile)',
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Batal'),
-                  ),
-                  FilledButton(
-                    onPressed: () {
-                      try {
-                        kelasVm.open(
-                          mataKuliahId: mataKuliahController.text,
-                          dosenId: dosenController.text,
-                          kapasitas:
-                              int.tryParse(kapasitasController.text) ?? 0,
-                          hari: hariController.text,
-                          jam: jamController.text,
-                          ruangan: ruanganController.text,
-                        );
-                        showAppMessage(context, kelasVm.message);
-                        Navigator.pop(context);
-                      } catch (e) {
-                        showAppMessage(context, e.toString());
-                      }
-                    },
-                    child: const Text('Simpan'),
-                  ),
-                ],
-              );
-            },
-          );
-        },
+        onPressed: () => _openKelasDialog(context, prodiId),
         icon: const Icon(Icons.add),
         label: const Text('Buka Kelas'),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          _SectionTitle('Ruangan'),
+          for (final item in ruanganVm.items)
+            InfoTile(
+              icon: Icons.meeting_room_outlined,
+              title: '${item.kodeRuangan} - ${item.namaRuangan}',
+              subtitle: 'Kapasitas: ${item.kapasitasRuangan} - ${item.lokasi}',
+              trailing: _CrudMenu(
+                onEdit: () => _editRuangan(context, item),
+                onDelete: () => _deleteRuangan(context, item.kodeRuangan),
+              ),
+            ),
+          FilledButton.icon(
+            onPressed: () => _addRuangan(context),
+            icon: const Icon(Icons.add_business_outlined),
+            label: const Text('Tambah Ruangan'),
+          ),
+          const SizedBox(height: 18),
+          _SectionTitle('Kelas Kuliah'),
           for (int i = 0; i < kelas.length; i++)
             AnimatedEntrance(
               delay: Duration(milliseconds: i * 80),
@@ -477,7 +412,7 @@ class KelasManagementView extends StatelessWidget {
                 icon: Icons.event_available_outlined,
                 title: kelas[i].id,
                 subtitle:
-                    '${service.getMataKuliahName(kelas[i].mataKuliahId)} - ${service.getDosenName(kelas[i].dosenId)}\n${kelas[i].hari}, ${kelas[i].jam} - ${kelas[i].ruangan}\nKapasitas: ${service.getJumlahPesertaKelas(kelas[i].id)}/${kelas[i].kapasitas}',
+                    '${service.getMataKuliahName(kelas[i].mataKuliahId)}\nDosen: ${service.getDosenPengajarNames(kelas[i].id)}\n${kelas[i].hari}, ${kelas[i].jam} - ${service.getRuanganName(kelas[i].ruangan)}\nKapasitas: ${service.getJumlahPesertaKelas(kelas[i].id)}/${kelas[i].kapasitas}',
                 trailing: _CrudMenu(
                   onEdit: () => _editKelas(context, kelas[i]),
                   onDelete: () => _deleteKelas(context, kelas[i].id),
@@ -744,8 +679,13 @@ class _CrudMenu extends StatelessWidget {
 
 Future<void> _editMahasiswa(BuildContext context, Mahasiswa item) async {
   final vm = context.read<MahasiswaViewModel>();
+  final service = context.read<MockService>();
   final nameController = TextEditingController(text: item.nama);
   String jenisKelamin = item.jenisKelamin;
+  String pembimbingAkademikId = item.pembimbingAkademikId;
+  final dosenProdi = service.dosen
+      .where((dosen) => dosen.prodiId == item.prodiId)
+      .toList();
 
   await showDialog<void>(
     context: context,
@@ -781,6 +721,23 @@ Future<void> _editMahasiswa(BuildContext context, Mahasiswa item) async {
                     if (value != null) setState(() => jenisKelamin = value);
                   },
                 ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  initialValue: pembimbingAkademikId,
+                  decoration: const InputDecoration(labelText: 'Dosen PA'),
+                  items: [
+                    for (final dosen in dosenProdi)
+                      DropdownMenuItem(
+                        value: dosen.nidn,
+                        child: Text(dosen.nama),
+                      ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() => pembimbingAkademikId = value);
+                    }
+                  },
+                ),
               ],
             );
           },
@@ -797,6 +754,7 @@ Future<void> _editMahasiswa(BuildContext context, Mahasiswa item) async {
                 nameController.text,
                 jenisKelamin,
                 item.prodiId,
+                pembimbingAkademikId,
               );
               showAppMessage(context, vm.message);
               Navigator.pop(context);
@@ -954,48 +912,227 @@ Future<void> _deleteMataKuliah(BuildContext context, String kode) async {
   if (context.mounted) showAppMessage(context, vm.message);
 }
 
+Future<void> _openKelasDialog(BuildContext context, String prodiId) async {
+  final vm = context.read<KelasViewModel>();
+  final service = context.read<MockService>();
+  final mataKuliah = service.mataKuliah
+      .where((item) => item.prodiId == prodiId)
+      .toList();
+  final dosen = service.dosen.where((item) => item.prodiId == prodiId).toList();
+  final ruangan = service.ruangan;
+  String? selectedMataKuliah = mataKuliah.isEmpty
+      ? null
+      : mataKuliah.first.kode;
+  String? selectedDosen = dosen.isEmpty ? null : dosen.first.nidn;
+  String? selectedRuangan = ruangan.isEmpty ? null : ruangan.first.kodeRuangan;
+  String selectedHari = 'Senin';
+  final kapasitasController = TextEditingController(text: '30');
+  final jamController = TextEditingController(text: '08.00 - 10.00');
+
+  await showDialog<void>(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        title: const Text('Buka Kelas'),
+        content: StatefulBuilder(
+          builder: (context, setState) {
+            return SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedMataKuliah,
+                    decoration: const InputDecoration(labelText: 'Mata Kuliah'),
+                    items: [
+                      for (final item in mataKuliah)
+                        DropdownMenuItem(
+                          value: item.kode,
+                          child: Text('${item.nama} (${item.kode})'),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      setState(() => selectedMataKuliah = value);
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedDosen,
+                    decoration: const InputDecoration(
+                      labelText: 'Dosen Pengajar',
+                    ),
+                    items: [
+                      for (final item in dosen)
+                        DropdownMenuItem(
+                          value: item.nidn,
+                          child: Text('${item.nama} (${item.nidn})'),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      setState(() => selectedDosen = value);
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedRuangan,
+                    decoration: const InputDecoration(labelText: 'Ruangan'),
+                    items: [
+                      for (final item in ruangan)
+                        DropdownMenuItem(
+                          value: item.kodeRuangan,
+                          child: Text(
+                            '${item.namaRuangan} (${item.kapasitasRuangan})',
+                          ),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      setState(() => selectedRuangan = value);
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedHari,
+                    decoration: const InputDecoration(labelText: 'Hari'),
+                    items: const [
+                      DropdownMenuItem(value: 'Senin', child: Text('Senin')),
+                      DropdownMenuItem(value: 'Selasa', child: Text('Selasa')),
+                      DropdownMenuItem(value: 'Rabu', child: Text('Rabu')),
+                      DropdownMenuItem(value: 'Kamis', child: Text('Kamis')),
+                      DropdownMenuItem(value: 'Jumat', child: Text('Jumat')),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) setState(() => selectedHari = value);
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: jamController,
+                    decoration: const InputDecoration(
+                      labelText: 'Jam (ex: 08.00 - 10.00)',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: kapasitasController,
+                    decoration: const InputDecoration(
+                      labelText: 'Kapasitas Peserta',
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (selectedMataKuliah == null ||
+                  selectedDosen == null ||
+                  selectedRuangan == null) {
+                showAppMessage(
+                  context,
+                  'Lengkapi mata kuliah, dosen, dan ruangan terlebih dahulu',
+                );
+                return;
+              }
+              vm.open(
+                mataKuliahId: selectedMataKuliah!,
+                dosenId: selectedDosen!,
+                kapasitas: int.tryParse(kapasitasController.text) ?? 0,
+                hari: selectedHari,
+                jam: jamController.text,
+                ruangan: selectedRuangan!,
+              );
+              showAppMessage(context, vm.message);
+              if ((vm.message ?? '').startsWith('Kelas berhasil')) {
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('Simpan'),
+          ),
+        ],
+      );
+    },
+  );
+}
+
 Future<void> _editKelas(BuildContext context, Kelas item) async {
   final vm = context.read<KelasViewModel>();
+  final service = context.read<MockService>();
   final kapasitasController = TextEditingController(
     text: item.kapasitas.toString(),
   );
-  final hariController = TextEditingController(text: item.hari);
+  String selectedHari = item.hari;
   final jamController = TextEditingController(text: item.jam);
-  final ruanganController = TextEditingController(text: item.ruangan);
+  String selectedRuangan = item.ruangan;
 
   await showDialog<void>(
     context: context,
     builder: (context) {
       return AlertDialog(
         title: Text('Ubah Kelas ${item.id}'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: kapasitasController,
-                decoration: const InputDecoration(
-                  labelText: 'Kapasitas Peserta',
-                ),
-                keyboardType: TextInputType.number,
+        content: StatefulBuilder(
+          builder: (context, setState) {
+            return SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedRuangan,
+                    decoration: const InputDecoration(labelText: 'Ruangan'),
+                    items: [
+                      for (final room in service.ruangan)
+                        DropdownMenuItem(
+                          value: room.kodeRuangan,
+                          child: Text(
+                            '${room.namaRuangan} (${room.kapasitasRuangan})',
+                          ),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() => selectedRuangan = value);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedHari,
+                    decoration: const InputDecoration(labelText: 'Hari'),
+                    items: const [
+                      DropdownMenuItem(value: 'Senin', child: Text('Senin')),
+                      DropdownMenuItem(value: 'Selasa', child: Text('Selasa')),
+                      DropdownMenuItem(value: 'Rabu', child: Text('Rabu')),
+                      DropdownMenuItem(value: 'Kamis', child: Text('Kamis')),
+                      DropdownMenuItem(value: 'Jumat', child: Text('Jumat')),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) setState(() => selectedHari = value);
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: jamController,
+                    decoration: const InputDecoration(
+                      labelText: 'Jam (ex: 08.00 - 10.00)',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: kapasitasController,
+                    decoration: const InputDecoration(
+                      labelText: 'Kapasitas Peserta',
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                ],
               ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: hariController,
-                decoration: const InputDecoration(labelText: 'Hari'),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: jamController,
-                decoration: const InputDecoration(labelText: 'Jam'),
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: ruanganController,
-                decoration: const InputDecoration(labelText: 'Ruangan'),
-              ),
-            ],
-          ),
+            );
+          },
         ),
         actions: [
           TextButton(
@@ -1009,12 +1146,14 @@ Future<void> _editKelas(BuildContext context, Kelas item) async {
                 mataKuliahId: item.mataKuliahId,
                 dosenId: item.dosenId,
                 kapasitas: int.tryParse(kapasitasController.text) ?? 0,
-                hari: hariController.text,
+                hari: selectedHari,
                 jam: jamController.text,
-                ruangan: ruanganController.text,
+                ruangan: selectedRuangan,
               );
               showAppMessage(context, vm.message);
-              Navigator.pop(context);
+              if ((vm.message ?? '').startsWith('Kelas berhasil')) {
+                Navigator.pop(context);
+              }
             },
             child: const Text('Simpan'),
           ),
@@ -1029,6 +1168,143 @@ Future<void> _deleteKelas(BuildContext context, String id) async {
   final confirmed = await _confirmDelete(context, 'Hapus kelas $id?');
   if (!confirmed) return;
   vm.delete(id);
+  if (context.mounted) showAppMessage(context, vm.message);
+}
+
+Future<void> _addRuangan(BuildContext context) async {
+  final vm = context.read<RuanganViewModel>();
+  final kodeController = TextEditingController();
+  final namaController = TextEditingController();
+  final kapasitasController = TextEditingController(text: '40');
+  final lokasiController = TextEditingController();
+
+  await showDialog<void>(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        title: const Text('Tambah Ruangan'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: kodeController,
+                decoration: const InputDecoration(labelText: 'Kode Ruangan'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: namaController,
+                decoration: const InputDecoration(labelText: 'Nama Ruangan'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: kapasitasController,
+                decoration: const InputDecoration(labelText: 'Kapasitas'),
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: lokasiController,
+                decoration: const InputDecoration(labelText: 'Lokasi/Gedung'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () {
+              vm.add(
+                kodeRuangan: kodeController.text,
+                namaRuangan: namaController.text,
+                kapasitasRuangan: int.tryParse(kapasitasController.text) ?? 0,
+                lokasi: lokasiController.text,
+              );
+              showAppMessage(context, vm.message);
+              if ((vm.message ?? '').startsWith('Ruangan berhasil')) {
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('Simpan'),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+Future<void> _editRuangan(BuildContext context, Ruangan item) async {
+  final vm = context.read<RuanganViewModel>();
+  final namaController = TextEditingController(text: item.namaRuangan);
+  final kapasitasController = TextEditingController(
+    text: item.kapasitasRuangan.toString(),
+  );
+  final lokasiController = TextEditingController(text: item.lokasi);
+
+  await showDialog<void>(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        title: Text('Ubah Ruangan ${item.kodeRuangan}'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: namaController,
+                decoration: const InputDecoration(labelText: 'Nama Ruangan'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: kapasitasController,
+                decoration: const InputDecoration(labelText: 'Kapasitas'),
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: lokasiController,
+                decoration: const InputDecoration(labelText: 'Lokasi/Gedung'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () {
+              vm.update(
+                kodeRuangan: item.kodeRuangan,
+                namaRuangan: namaController.text,
+                kapasitasRuangan: int.tryParse(kapasitasController.text) ?? 0,
+                lokasi: lokasiController.text,
+              );
+              showAppMessage(context, vm.message);
+              if ((vm.message ?? '').startsWith('Ruangan berhasil')) {
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('Simpan'),
+          ),
+        ],
+      );
+    },
+  );
+}
+
+Future<void> _deleteRuangan(BuildContext context, String kodeRuangan) async {
+  final vm = context.read<RuanganViewModel>();
+  final confirmed = await _confirmDelete(
+    context,
+    'Hapus ruangan $kodeRuangan?',
+  );
+  if (!confirmed) return;
+  vm.delete(kodeRuangan);
   if (context.mounted) showAppMessage(context, vm.message);
 }
 
@@ -1057,9 +1333,16 @@ Future<bool> _confirmDelete(BuildContext context, String message) async {
 
 Future<void> _quickAddMahasiswa(BuildContext context, String prodiId) async {
   final vm = context.read<MahasiswaViewModel>();
+  final service = context.read<MockService>();
   final nimController = TextEditingController();
   final nameController = TextEditingController();
   String jenisKelamin = 'Laki-laki';
+  final dosenProdi = service.dosen
+      .where((dosen) => dosen.prodiId == prodiId)
+      .toList();
+  String? pembimbingAkademikId = dosenProdi.isEmpty
+      ? null
+      : dosenProdi.first.nidn;
 
   await showDialog<void>(
     context: context,
@@ -1100,6 +1383,21 @@ Future<void> _quickAddMahasiswa(BuildContext context, String prodiId) async {
                     if (value != null) setState(() => jenisKelamin = value);
                   },
                 ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  initialValue: pembimbingAkademikId,
+                  decoration: const InputDecoration(labelText: 'Dosen PA'),
+                  items: [
+                    for (final dosen in dosenProdi)
+                      DropdownMenuItem(
+                        value: dosen.nidn,
+                        child: Text(dosen.nama),
+                      ),
+                  ],
+                  onChanged: (value) {
+                    setState(() => pembimbingAkademikId = value);
+                  },
+                ),
               ],
             );
           },
@@ -1112,13 +1410,15 @@ Future<void> _quickAddMahasiswa(BuildContext context, String prodiId) async {
           FilledButton(
             onPressed: () {
               if (nimController.text.isNotEmpty &&
-                  nameController.text.isNotEmpty) {
+                  nameController.text.isNotEmpty &&
+                  pembimbingAkademikId != null) {
                 try {
                   vm.add(
                     nimController.text,
                     nameController.text,
                     jenisKelamin,
                     prodiId,
+                    pembimbingAkademikId!,
                   );
                   showAppMessage(context, vm.message);
                   Navigator.pop(context);

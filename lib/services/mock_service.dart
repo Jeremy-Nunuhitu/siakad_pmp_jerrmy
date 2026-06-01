@@ -136,6 +136,27 @@ class MockService {
     ),
   ];
 
+  final List<Ruangan> _ruangan = [
+    const Ruangan(
+      kodeRuangan: 'LAB-1',
+      namaRuangan: 'Lab Komputer 1',
+      kapasitasRuangan: 35,
+      lokasi: 'Gedung Laboratorium',
+    ),
+    const Ruangan(
+      kodeRuangan: 'R-203',
+      namaRuangan: 'Ruang Kuliah 203',
+      kapasitasRuangan: 40,
+      lokasi: 'Gedung A',
+    ),
+    const Ruangan(
+      kodeRuangan: 'R-204',
+      namaRuangan: 'Ruang Kuliah 204',
+      kapasitasRuangan: 30,
+      lokasi: 'Gedung A',
+    ),
+  ];
+
   final List<Kelas> _kelas = [
     const Kelas(
       id: 'k-01',
@@ -144,7 +165,7 @@ class MockService {
       kapasitas: 30,
       hari: 'Senin',
       jam: '08.00 - 10.30',
-      ruangan: 'Lab Mobile',
+      ruangan: 'LAB-1',
     ),
     const Kelas(
       id: 'k-02',
@@ -153,7 +174,22 @@ class MockService {
       kapasitas: 1,
       hari: 'Selasa',
       jam: '10.40 - 13.10',
-      ruangan: 'Ruang 204',
+      ruangan: 'R-203',
+    ),
+  ];
+
+  final List<DosenPengajar> _dosenPengajar = [
+    const DosenPengajar(
+      id: 'dp-01',
+      idKelas: 'k-01',
+      nidnDosen: 'd-01',
+      peranMengajar: 'Dosen Utama',
+    ),
+    const DosenPengajar(
+      id: 'dp-02',
+      idKelas: 'k-02',
+      nidnDosen: 'd-02',
+      peranMengajar: 'Dosen Utama',
     ),
   ];
 
@@ -241,7 +277,11 @@ class MockService {
   late final List<Mahasiswa> mahasiswa = UnmodifiableListView(_mahasiswa);
   late final List<Dosen> dosen = UnmodifiableListView(_dosen);
   late final List<MataKuliah> mataKuliah = UnmodifiableListView(_mataKuliah);
+  late final List<Ruangan> ruangan = UnmodifiableListView(_ruangan);
   late final List<Kelas> kelas = UnmodifiableListView(_kelas);
+  late final List<DosenPengajar> dosenPengajar = UnmodifiableListView(
+    _dosenPengajar,
+  );
   late final List<KRS> krs = UnmodifiableListView(_krs);
   late final List<Nilai> nilai = UnmodifiableListView(_nilai);
   late final List<Tugas> tugas = UnmodifiableListView(_tugas);
@@ -408,12 +448,14 @@ class MockService {
     String nama,
     String jenisKelamin,
     String prodiId,
+    String pembimbingAkademikId,
   ) {
     // Operator prodi menambahkan mahasiswa dengan password awal default.
     _ensureNotBlank(nim, 'NIM');
     _ensureNotBlank(nama, 'Nama mahasiswa');
     _ensureNotBlank(jenisKelamin, 'Jenis kelamin');
     _ensureExists(_prodi.any((item) => item.id == prodiId), 'Prodi');
+    _ensureDosenPaValid(prodiId, pembimbingAkademikId);
     if (_mahasiswa.any((item) => item.nim == nim)) {
       throw StateError('NIM mahasiswa sudah terdaftar');
     }
@@ -424,7 +466,7 @@ class MockService {
         jenisKelamin: jenisKelamin,
         prodiId: prodiId,
         password: 'password',
-        pembimbingAkademikId: _defaultPembimbingAkademikId(prodiId),
+        pembimbingAkademikId: pembimbingAkademikId,
         semester: 1,
       ),
     );
@@ -437,18 +479,20 @@ class MockService {
     required String nama,
     required String jenisKelamin,
     required String prodiId,
+    required String pembimbingAkademikId,
   }) {
     _ensureNotBlank(nama, 'Nama mahasiswa');
     _ensureNotBlank(jenisKelamin, 'Jenis kelamin');
     final index = _mahasiswa.indexWhere((item) => item.nim == nim);
     if (index == -1) throw StateError('Mahasiswa tidak ditemukan');
+    _ensureDosenPaValid(prodiId, pembimbingAkademikId);
     _mahasiswa[index] = Mahasiswa(
       nim: nim,
       nama: nama,
       jenisKelamin: jenisKelamin,
       prodiId: prodiId,
       password: _mahasiswa[index].password,
-      pembimbingAkademikId: _mahasiswa[index].pembimbingAkademikId,
+      pembimbingAkademikId: pembimbingAkademikId,
       semester: _mahasiswa[index].semester,
       email: _mahasiswa[index].email,
       noHp: _mahasiswa[index].noHp,
@@ -621,6 +665,80 @@ class MockService {
     return 'Mata kuliah berhasil dihapus';
   }
 
+  String addRuangan({
+    required String kodeRuangan,
+    required String namaRuangan,
+    required int kapasitasRuangan,
+    required String lokasi,
+  }) {
+    _ensureNotBlank(kodeRuangan, 'Kode ruangan');
+    _ensureNotBlank(namaRuangan, 'Nama ruangan');
+    _ensureNotBlank(lokasi, 'Lokasi ruangan');
+    if (kapasitasRuangan <= 0) {
+      throw StateError('Kapasitas ruangan harus lebih dari 0');
+    }
+    if (_ruangan.any(
+      (item) =>
+          item.kodeRuangan.toLowerCase() == kodeRuangan.trim().toLowerCase(),
+    )) {
+      throw StateError('Kode ruangan sudah terdaftar');
+    }
+
+    _ruangan.add(
+      Ruangan(
+        kodeRuangan: kodeRuangan.trim().toUpperCase(),
+        namaRuangan: namaRuangan.trim(),
+        kapasitasRuangan: kapasitasRuangan,
+        lokasi: lokasi.trim(),
+      ),
+    );
+    return 'Ruangan berhasil ditambahkan';
+  }
+
+  String updateRuangan({
+    required String kodeRuangan,
+    required String namaRuangan,
+    required int kapasitasRuangan,
+    required String lokasi,
+  }) {
+    _ensureNotBlank(namaRuangan, 'Nama ruangan');
+    _ensureNotBlank(lokasi, 'Lokasi ruangan');
+    if (kapasitasRuangan <= 0) {
+      throw StateError('Kapasitas ruangan harus lebih dari 0');
+    }
+    final index = _ruangan.indexWhere(
+      (item) => item.kodeRuangan == kodeRuangan,
+    );
+    if (index == -1) throw StateError('Ruangan tidak ditemukan');
+    final maxKapasitasKelas = _kelas
+        .where((item) => item.ruangan == kodeRuangan)
+        .fold<int>(
+          0,
+          (max, item) => item.kapasitas > max ? item.kapasitas : max,
+        );
+    if (kapasitasRuangan < maxKapasitasKelas) {
+      throw StateError(
+        'Kapasitas ruangan tidak boleh kurang dari kapasitas kelas aktif',
+      );
+    }
+
+    _ruangan[index] = Ruangan(
+      kodeRuangan: kodeRuangan,
+      namaRuangan: namaRuangan.trim(),
+      kapasitasRuangan: kapasitasRuangan,
+      lokasi: lokasi.trim(),
+    );
+    return 'Ruangan berhasil diperbarui';
+  }
+
+  String deleteRuangan(String kodeRuangan) {
+    if (_kelas.any((item) => item.ruangan == kodeRuangan)) {
+      throw StateError('Ruangan masih digunakan kelas kuliah');
+    }
+    _ruangan.removeWhere((item) => item.kodeRuangan == kodeRuangan);
+    return 'Ruangan berhasil dihapus';
+  }
+
   String openKelas({
     required String mataKuliahId,
     required String dosenId,
@@ -639,6 +757,13 @@ class MockService {
     _ensureNotBlank(hari, 'Hari');
     _ensureNotBlank(jam, 'Jam');
     _ensureNotBlank(ruangan, 'Ruangan');
+    _ensureRuanganAvailable(
+      kodeRuangan: ruangan,
+      kapasitasKelas: kapasitas,
+      hari: hari,
+      jam: jam,
+    );
+    _ensureDosenAvailable(dosenId: dosenId, hari: hari, jam: jam);
     final newKelasId = _nextId('k', _kelas.length);
     _kelas.add(
       Kelas(
@@ -648,7 +773,15 @@ class MockService {
         kapasitas: kapasitas,
         hari: hari,
         jam: jam,
-        ruangan: ruangan,
+        ruangan: ruangan.trim().toUpperCase(),
+      ),
+    );
+    _dosenPengajar.add(
+      DosenPengajar(
+        id: _nextId('dp', _dosenPengajar.length),
+        idKelas: newKelasId,
+        nidnDosen: dosenId,
+        peranMengajar: 'Dosen Utama',
       ),
     );
 
@@ -687,6 +820,19 @@ class MockService {
       'Mata kuliah',
     );
     _ensureExists(_dosen.any((item) => item.nidn == dosenId), 'Dosen');
+    _ensureRuanganAvailable(
+      kodeRuangan: ruangan,
+      kapasitasKelas: kapasitas,
+      hari: hari,
+      jam: jam,
+      ignoreKelasId: id,
+    );
+    _ensureDosenAvailable(
+      dosenId: dosenId,
+      hari: hari,
+      jam: jam,
+      ignoreKelasId: id,
+    );
     _kelas[index] = Kelas(
       id: id,
       mataKuliahId: mataKuliahId,
@@ -694,8 +840,9 @@ class MockService {
       kapasitas: kapasitas,
       hari: hari,
       jam: jam,
-      ruangan: ruangan,
+      ruangan: ruangan.trim().toUpperCase(),
     );
+    _syncDosenPengajarUtama(id, dosenId);
     return 'Kelas berhasil diperbarui';
   }
 
@@ -704,6 +851,7 @@ class MockService {
       throw StateError('Kelas masih memiliki peserta KRS');
     }
     _kelas.removeWhere((item) => item.id == id);
+    _dosenPengajar.removeWhere((item) => item.idKelas == id);
     _pertemuan.removeWhere((item) => item.kelasId == id);
     _tugas.removeWhere((item) => item.kelasId == id);
     return 'Kelas berhasil dihapus';
@@ -729,9 +877,20 @@ class MockService {
       throw StateError('Kapasitas kelas sudah penuh');
     }
     if (_krs.any(
-      (item) => item.mahasiswaId == mahasiswaId && item.kelasId == kelasId,
+      (item) =>
+          item.mahasiswaId == mahasiswaId &&
+          item.kelasId == kelasId &&
+          item.semester == mahasiswa.semester,
     )) {
       throw StateError('Kelas sudah ada di KRS');
+    }
+    if (_krs.any(
+      (item) =>
+          item.mahasiswaId == mahasiswaId &&
+          item.semester == mahasiswa.semester &&
+          (item.isSubmitted || item.isValidated),
+    )) {
+      throw StateError('KRS yang sudah diajukan/disetujui tidak bisa diubah');
     }
     _krs.add(
       KRS(
@@ -761,7 +920,14 @@ class MockService {
       throw StateError('KRS semester ini sudah disetujui');
     }
     for (final index in indexList) {
-      _krs[index] = _krs[index].copyWith(isSubmitted: true);
+      if (_krs[index].isValidated) {
+        throw StateError('KRS semester ini sudah disetujui');
+      }
+      _krs[index] = _krs[index].copyWith(
+        isSubmitted: true,
+        isRejected: false,
+        catatanDosenPa: '',
+      );
     }
     return 'KRS berhasil diajukan ke dosen pembimbing akademik';
   }
@@ -775,11 +941,65 @@ class MockService {
     if (mahasiswa.pembimbingAkademikId != dosenId) {
       throw StateError('KRS hanya dapat disetujui dosen pembimbing akademik');
     }
-    if (!_krs[index].isSubmitted) {
+    final target = _krs[index];
+    if (!target.isSubmitted) {
       throw StateError('KRS belum diajukan mahasiswa');
     }
-    _krs[index] = _krs[index].copyWith(isValidated: true);
+    for (int i = 0; i < _krs.length; i++) {
+      final item = _krs[i];
+      if (item.mahasiswaId == target.mahasiswaId &&
+          item.semester == target.semester &&
+          item.isSubmitted) {
+        _krs[i] = item.copyWith(
+          isValidated: true,
+          isRejected: false,
+          catatanDosenPa: '',
+        );
+      }
+    }
     return 'KRS berhasil disetujui';
+  }
+
+  String rejectKrs(String krsId, String dosenId, String catatan) {
+    _ensureNotBlank(catatan, 'Catatan penolakan');
+    final index = _krs.indexWhere((item) => item.id == krsId);
+    if (index == -1) throw StateError('KRS tidak ditemukan');
+    final mahasiswa = _mahasiswa.firstWhere(
+      (item) => item.nim == _krs[index].mahasiswaId,
+    );
+    if (mahasiswa.pembimbingAkademikId != dosenId) {
+      throw StateError('KRS hanya dapat ditolak dosen pembimbing akademik');
+    }
+    final target = _krs[index];
+    if (!target.isSubmitted) {
+      throw StateError('KRS belum diajukan mahasiswa');
+    }
+    for (int i = 0; i < _krs.length; i++) {
+      final item = _krs[i];
+      if (item.mahasiswaId == target.mahasiswaId &&
+          item.semester == target.semester &&
+          item.isSubmitted) {
+        _krs[i] = item.copyWith(
+          isSubmitted: false,
+          isValidated: false,
+          isRejected: true,
+          catatanDosenPa: catatan.trim(),
+        );
+      }
+    }
+    return 'KRS ditolak dengan catatan';
+  }
+
+  String removeKrs(String krsId, String mahasiswaId) {
+    final index = _krs.indexWhere(
+      (item) => item.id == krsId && item.mahasiswaId == mahasiswaId,
+    );
+    if (index == -1) throw StateError('KRS tidak ditemukan');
+    if (_krs[index].isSubmitted || _krs[index].isValidated) {
+      throw StateError('KRS yang sudah diajukan/disetujui tidak bisa dihapus');
+    }
+    _krs.removeAt(index);
+    return 'Kelas berhasil dihapus dari KRS';
   }
 
   String inputNilai({
@@ -795,7 +1015,7 @@ class MockService {
     // Nilai hanya bisa diinput oleh dosen pengampu dan untuk mahasiswa
     // yang benar-benar mengambil kelas tersebut di KRS.
     final kelas = _kelas.firstWhere((item) => item.id == kelasId);
-    if (kelas.dosenId != dosenId) {
+    if (!isDosenMengajarKelas(dosenId, kelas.id)) {
       throw StateError('Dosen hanya bisa input nilai kelas yang diajar');
     }
     _ensureExists(
@@ -834,6 +1054,48 @@ class MockService {
     return _dosen.firstWhere((item) => item.nidn == nidn).nama;
   }
 
+  String getRuanganName(String kodeRuangan) {
+    final matches = _ruangan.where((item) => item.kodeRuangan == kodeRuangan);
+    if (matches.isEmpty) return kodeRuangan;
+    return matches.first.namaRuangan;
+  }
+
+  String getRuanganInfo(String kodeRuangan) {
+    final matches = _ruangan.where((item) => item.kodeRuangan == kodeRuangan);
+    if (matches.isEmpty) return kodeRuangan;
+    final item = matches.first;
+    return '${item.namaRuangan} (${item.kodeRuangan}) - ${item.lokasi}';
+  }
+
+  List<DosenPengajar> getDosenPengajarKelas(String kelasId) {
+    final pengajar = _dosenPengajar
+        .where((item) => item.idKelas == kelasId)
+        .toList();
+    if (pengajar.isNotEmpty) return pengajar;
+    final kelas = _kelas.firstWhere((item) => item.id == kelasId);
+    return [
+      DosenPengajar(
+        id: 'fallback-${kelas.id}',
+        idKelas: kelas.id,
+        nidnDosen: kelas.dosenId,
+      ),
+    ];
+  }
+
+  String getDosenPengajarNames(String kelasId) {
+    return getDosenPengajarKelas(kelasId)
+        .map(
+          (item) => '${getDosenName(item.nidnDosen)} (${item.peranMengajar})',
+        )
+        .join(', ');
+  }
+
+  bool isDosenMengajarKelas(String dosenId, String kelasId) {
+    return getDosenPengajarKelas(
+      kelasId,
+    ).any((item) => item.nidnDosen == dosenId);
+  }
+
   String getMahasiswaName(String nim) {
     return _mahasiswa.firstWhere((item) => item.nim == nim).nama;
   }
@@ -848,7 +1110,7 @@ class MockService {
   }
 
   int getTotalSksDosen(String nidn) {
-    final kelasDosen = _kelas.where((k) => k.dosenId == nidn);
+    final kelasDosen = _kelas.where((k) => isDosenMengajarKelas(nidn, k.id));
     int total = 0;
     for (final k in kelasDosen) {
       final mk = _mataKuliah.firstWhere((mk) => mk.kode == k.mataKuliahId);
@@ -868,12 +1130,12 @@ class MockService {
     }
   }
 
-  String _defaultPembimbingAkademikId(String prodiId) {
-    final matches = _dosen.where((item) => item.prodiId == prodiId);
-    if (matches.isEmpty) {
-      throw StateError('Belum ada dosen pembimbing akademik untuk prodi ini');
-    }
-    return matches.first.nidn;
+  void _ensureDosenPaValid(String prodiId, String dosenId) {
+    _ensureNotBlank(dosenId, 'Dosen PA');
+    _ensureExists(
+      _dosen.any((item) => item.nidn == dosenId && item.prodiId == prodiId),
+      'Dosen PA pada prodi ini',
+    );
   }
 
   String addTugas({
@@ -885,7 +1147,7 @@ class MockService {
   }) {
     // Tugas hanya dapat dibuat oleh dosen untuk kelas yang dia ampu.
     final kelas = _kelas.firstWhere((item) => item.id == kelasId);
-    if (kelas.dosenId != dosenId) {
+    if (!isDosenMengajarKelas(dosenId, kelas.id)) {
       throw StateError('Dosen hanya bisa memberi tugas pada kelas yang diajar');
     }
     _ensureNotBlank(judul, 'Judul tugas');
@@ -1070,6 +1332,103 @@ class MockService {
         ),
       );
     });
+  }
+
+  void _syncDosenPengajarUtama(String kelasId, String dosenId) {
+    final index = _dosenPengajar.indexWhere((item) => item.idKelas == kelasId);
+    if (index == -1) {
+      _dosenPengajar.add(
+        DosenPengajar(
+          id: _nextId('dp', _dosenPengajar.length),
+          idKelas: kelasId,
+          nidnDosen: dosenId,
+          peranMengajar: 'Dosen Utama',
+        ),
+      );
+      return;
+    }
+
+    _dosenPengajar[index] = DosenPengajar(
+      id: _dosenPengajar[index].id,
+      idKelas: kelasId,
+      nidnDosen: dosenId,
+      peranMengajar: _dosenPengajar[index].peranMengajar,
+    );
+  }
+
+  void _ensureRuanganAvailable({
+    required String kodeRuangan,
+    required int kapasitasKelas,
+    required String hari,
+    required String jam,
+    String? ignoreKelasId,
+  }) {
+    final kode = kodeRuangan.trim().toUpperCase();
+    final room = _ruangan.where((item) => item.kodeRuangan == kode);
+    if (room.isEmpty) throw StateError('Ruangan tidak ditemukan');
+    if (room.first.kapasitasRuangan < kapasitasKelas) {
+      throw StateError('Kapasitas ruangan lebih kecil dari kapasitas kelas');
+    }
+    final bentrok = _kelas.any(
+      (item) =>
+          item.id != ignoreKelasId &&
+          item.ruangan == kode &&
+          item.hari.toLowerCase() == hari.trim().toLowerCase() &&
+          _isJamBentrok(item.jam, jam),
+    );
+    if (bentrok) {
+      throw StateError('Ruangan sudah digunakan pada jadwal tersebut');
+    }
+  }
+
+  void _ensureDosenAvailable({
+    required String dosenId,
+    required String hari,
+    required String jam,
+    String? ignoreKelasId,
+  }) {
+    final bentrok = _kelas.any(
+      (item) =>
+          item.id != ignoreKelasId &&
+          isDosenMengajarKelas(dosenId, item.id) &&
+          item.hari.toLowerCase() == hari.trim().toLowerCase() &&
+          _isJamBentrok(item.jam, jam),
+    );
+    if (bentrok) {
+      throw StateError('Dosen pengajar memiliki jadwal bentrok');
+    }
+  }
+
+  bool _isJamBentrok(String a, String b) {
+    final rangeA = _parseJamRange(a);
+    final rangeB = _parseJamRange(b);
+    if (rangeA == null || rangeB == null) {
+      return _normalizeJam(a) == _normalizeJam(b);
+    }
+    return rangeA.start < rangeB.end && rangeB.start < rangeA.end;
+  }
+
+  ({int start, int end})? _parseJamRange(String value) {
+    final parts = value.split(RegExp(r'\s*-\s*'));
+    if (parts.length != 2) return null;
+    final start = _parseJam(parts[0]);
+    final end = _parseJam(parts[1]);
+    if (start == null || end == null || end <= start) return null;
+    return (start: start, end: end);
+  }
+
+  int? _parseJam(String value) {
+    final cleaned = value.trim().replaceAll('.', ':');
+    final parts = cleaned.split(':');
+    if (parts.length < 2) return null;
+    final hour = int.tryParse(parts[0]);
+    final minute = int.tryParse(parts[1]);
+    if (hour == null || minute == null) return null;
+    return hour * 60 + minute;
+  }
+
+  String _normalizeJam(String value) {
+    return value.replaceAll(RegExp(r'\s+'), '').replaceAll('.', ':');
   }
 
   void _ensureNotBlank(String value, String label) {
