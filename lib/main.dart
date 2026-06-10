@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
 import 'services/mock_service.dart';
 import 'viewmodels/auth_viewmodel.dart';
 import 'viewmodels/dosen_viewmodel.dart';
@@ -15,20 +14,22 @@ import 'viewmodels/ruangan_viewmodel.dart';
 import 'viewmodels/theme_viewmodel.dart';
 import 'views/splash_view.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final service = await MockService.create();
   // Titik awal aplikasi: Flutter akan membangun widget SiakadApp.
-  runApp(const SiakadApp());
+  runApp(SiakadApp(service: service));
 }
 
 class SiakadApp extends StatelessWidget {
-  const SiakadApp({super.key});
+  const SiakadApp({super.key, required this.service});
+
+  final MockService service;
 
   @override
   Widget build(BuildContext context) {
-    // MockService menjadi sumber data sementara untuk seluruh aplikasi.
+    // MockService sekarang memuat dan menyimpan data ke SQLite.
     // Instance ini dibagikan ke semua ViewModel melalui Provider.
-    final service = MockService();
-
     return MultiProvider(
       providers: [
         // Provider di bawah membentuk alur data:

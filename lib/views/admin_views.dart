@@ -98,16 +98,21 @@ class FakultasView extends StatelessWidget {
             label: const Text('Fakultas'),
           ),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              for (int i = 0; i < vm.items.length; i++)
-                AnimatedEntrance(
-                  delay: Duration(milliseconds: i * 80),
+              _SearchableList<Fakultas>(
+                items: vm.items,
+                hintText: 'Cari nama fakultas atau ID',
+                searchableText: (item) => '${item.id} ${item.nama}',
+                itemBuilder: (context, item, index) => AnimatedEntrance(
+                  delay: Duration(milliseconds: index * 80),
                   child: InfoTile(
                     icon: Icons.account_balance_outlined,
-                    title: vm.items[i].nama,
-                    subtitle: 'ID: ${vm.items[i].id}',
+                    title: item.nama,
+                    subtitle: 'ID: ${item.id}',
                   ),
                 ),
+              ),
             ],
           ),
         );
@@ -205,20 +210,26 @@ class ProdiView extends StatelessWidget {
             builder: (context) {
               final items = vm.items(fakultasId: fakultasId);
               return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  for (int i = 0; i < items.length; i++)
-                    AnimatedEntrance(
-                      delay: Duration(milliseconds: i * 80),
+                  _SearchableList<Prodi>(
+                    items: items,
+                    hintText: 'Cari nama prodi, ID, atau fakultas',
+                    searchableText: (item) =>
+                        '${item.id} ${item.nama} ${item.fakultasId}',
+                    itemBuilder: (context, item, index) => AnimatedEntrance(
+                      delay: Duration(milliseconds: index * 80),
                       child: InfoTile(
                         icon: Icons.apartment_outlined,
-                        title: items[i].nama,
-                        subtitle: 'Fakultas: ${items[i].fakultasId}',
+                        title: item.nama,
+                        subtitle: 'Fakultas: ${item.fakultasId}',
                         trailing: _CrudMenu(
-                          onEdit: () => _editProdi(context, items[i]),
-                          onDelete: () => _deleteProdi(context, items[i].id),
+                          onEdit: () => _editProdi(context, item),
+                          onDelete: () => _deleteProdi(context, item.id),
                         ),
                       ),
                     ),
+                  ),
                 ],
               );
             },
@@ -289,45 +300,73 @@ class ProdiScopeDataView extends StatelessWidget {
   }
 }
 
-class ProdiCoreDataView extends StatelessWidget {
-  const ProdiCoreDataView({required this.prodiId, super.key});
+class MahasiswaManagementView extends StatelessWidget {
+  const MahasiswaManagementView({required this.prodiId, super.key});
 
   final String prodiId;
 
   @override
   Widget build(BuildContext context) {
-    // Operator prodi mengelola data inti akademik:
-    // mahasiswa, dosen, dan mata kuliah.
     final mahasiswaVm = context.watch<MahasiswaViewModel>();
-    final dosenVm = context.watch<DosenViewModel>();
-    final mkVm = context.watch<MataKuliahViewModel>();
+    final service = context.watch<MockService>();
 
     return AppScaffold(
-      title: 'Data Prodi',
+      title: 'Kelola Mahasiswa',
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _quickAddMahasiswa(context, prodiId),
+        icon: const Icon(Icons.add),
+        label: const Text('Tambah Mahasiswa'),
+      ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _SectionTitle('Mahasiswa'),
-          for (final item in mahasiswaVm.items(prodiId: prodiId))
-            InfoTile(
+          _SearchableList<Mahasiswa>(
+            items: mahasiswaVm.items(prodiId: prodiId),
+            hintText: 'Cari nama, NIM, jenis kelamin, atau dosen PA',
+            searchableText: (item) =>
+                '${item.nama} ${item.nim} ${item.jenisKelamin} ${service.getDosenName(item.pembimbingAkademikId)}',
+            itemBuilder: (context, item, index) => InfoTile(
               icon: Icons.groups_outlined,
               title: item.nama,
               subtitle:
-                  '${item.nim} - ${item.jenisKelamin} - PA: ${context.read<MockService>().getDosenName(item.pembimbingAkademikId)}',
+                  '${item.nim} - ${item.jenisKelamin} - PA: ${service.getDosenName(item.pembimbingAkademikId)}',
               trailing: _CrudMenu(
                 onEdit: () => _editMahasiswa(context, item),
                 onDelete: () => _deleteMahasiswa(context, item.nim),
               ),
             ),
-          FilledButton.icon(
-            onPressed: () => _quickAddMahasiswa(context, prodiId),
-            icon: const Icon(Icons.add),
-            label: const Text('Tambah Mahasiswa'),
           ),
-          const SizedBox(height: 18),
-          _SectionTitle('Dosen'),
-          for (final item in dosenVm.items(prodiId: prodiId))
-            InfoTile(
+        ],
+      ),
+    );
+  }
+}
+
+class DosenManagementView extends StatelessWidget {
+  const DosenManagementView({required this.prodiId, super.key});
+
+  final String prodiId;
+
+  @override
+  Widget build(BuildContext context) {
+    final dosenVm = context.watch<DosenViewModel>();
+
+    return AppScaffold(
+      title: 'Kelola Dosen',
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _quickAddDosen(context, prodiId),
+        icon: const Icon(Icons.add),
+        label: const Text('Tambah Dosen'),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _SearchableList<Dosen>(
+            items: dosenVm.items(prodiId: prodiId),
+            hintText: 'Cari nama, NIDN, email, atau keahlian',
+            searchableText: (item) =>
+                '${item.nama} ${item.nidn} ${item.email} ${item.noHp} ${item.keahlian}',
+            itemBuilder: (context, item, index) => InfoTile(
               icon: Icons.co_present_outlined,
               title: item.nama,
               subtitle: '${item.nidn} - Prodi: ${item.prodiId}',
@@ -336,15 +375,37 @@ class ProdiCoreDataView extends StatelessWidget {
                 onDelete: () => _deleteDosen(context, item.nidn),
               ),
             ),
-          FilledButton.icon(
-            onPressed: () => _quickAddDosen(context, prodiId),
-            icon: const Icon(Icons.add),
-            label: const Text('Tambah Dosen'),
           ),
-          const SizedBox(height: 18),
-          _SectionTitle('Mata Kuliah'),
-          for (final item in mkVm.items(prodiId: prodiId))
-            InfoTile(
+        ],
+      ),
+    );
+  }
+}
+
+class MataKuliahManagementView extends StatelessWidget {
+  const MataKuliahManagementView({required this.prodiId, super.key});
+
+  final String prodiId;
+
+  @override
+  Widget build(BuildContext context) {
+    final mkVm = context.watch<MataKuliahViewModel>();
+
+    return AppScaffold(
+      title: 'Kelola Mata Kuliah',
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _quickAddMataKuliah(context, prodiId),
+        icon: const Icon(Icons.add),
+        label: const Text('Tambah Mata Kuliah'),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _SearchableList<MataKuliah>(
+            items: mkVm.items(prodiId: prodiId),
+            hintText: 'Cari kode, nama mata kuliah, atau jumlah SKS',
+            searchableText: (item) => '${item.kode} ${item.nama} ${item.sks}',
+            itemBuilder: (context, item, index) => InfoTile(
               icon: Icons.menu_book_outlined,
               title: item.nama,
               subtitle: '${item.kode} - ${item.sks} SKS',
@@ -353,10 +414,44 @@ class ProdiCoreDataView extends StatelessWidget {
                 onDelete: () => _deleteMataKuliah(context, item.kode),
               ),
             ),
-          FilledButton.icon(
-            onPressed: () => _quickAddMataKuliah(context, prodiId),
-            icon: const Icon(Icons.add),
-            label: const Text('Tambah Mata Kuliah'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class RuanganManagementView extends StatelessWidget {
+  const RuanganManagementView({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final ruanganVm = context.watch<RuanganViewModel>();
+
+    return AppScaffold(
+      title: 'Kelola Ruangan',
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _addRuangan(context),
+        icon: const Icon(Icons.add_business_outlined),
+        label: const Text('Tambah Ruangan'),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _SearchableList<Ruangan>(
+            items: ruanganVm.items,
+            hintText: 'Cari kode, nama ruangan, kapasitas, atau lokasi',
+            searchableText: (item) =>
+                '${item.kodeRuangan} ${item.namaRuangan} ${item.kapasitasRuangan} ${item.lokasi}',
+            itemBuilder: (context, item, index) => InfoTile(
+              icon: Icons.meeting_room_outlined,
+              title: '${item.kodeRuangan} - ${item.namaRuangan}',
+              subtitle: 'Kapasitas: ${item.kapasitasRuangan} - ${item.lokasi}',
+              trailing: _CrudMenu(
+                onEdit: () => _editRuangan(context, item),
+                onDelete: () => _deleteRuangan(context, item.kodeRuangan),
+              ),
+            ),
           ),
         ],
       ),
@@ -371,14 +466,14 @@ class KelasManagementView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Kelas dibuka oleh operator prodi dari kombinasi mata kuliah dan dosen.
+    // Kelas dibuka oleh operator prodi dari kombinasi mata kuliah, dosen,
+    // jadwal, dan ruangan yang sudah dikelola di menu Ruangan.
     final kelasVm = context.watch<KelasViewModel>();
-    final ruanganVm = context.watch<RuanganViewModel>();
     final service = context.watch<MockService>();
     final kelas = kelasVm.items(prodiId: prodiId);
 
     return AppScaffold(
-      title: 'Kelola Kelas',
+      title: 'Kelola Kelas Kuliah',
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openKelasDialog(context, prodiId),
         icon: const Icon(Icons.add),
@@ -387,38 +482,25 @@ class KelasManagementView extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _SectionTitle('Ruangan'),
-          for (final item in ruanganVm.items)
-            InfoTile(
-              icon: Icons.meeting_room_outlined,
-              title: '${item.kodeRuangan} - ${item.namaRuangan}',
-              subtitle: 'Kapasitas: ${item.kapasitasRuangan} - ${item.lokasi}',
-              trailing: _CrudMenu(
-                onEdit: () => _editRuangan(context, item),
-                onDelete: () => _deleteRuangan(context, item.kodeRuangan),
-              ),
-            ),
-          FilledButton.icon(
-            onPressed: () => _addRuangan(context),
-            icon: const Icon(Icons.add_business_outlined),
-            label: const Text('Tambah Ruangan'),
-          ),
-          const SizedBox(height: 18),
-          _SectionTitle('Kelas Kuliah'),
-          for (int i = 0; i < kelas.length; i++)
-            AnimatedEntrance(
-              delay: Duration(milliseconds: i * 80),
+          _SearchableList<Kelas>(
+            items: kelas,
+            hintText: 'Cari ID, mata kuliah, dosen, hari, jam, atau ruangan',
+            searchableText: (item) =>
+                '${item.id} ${service.getMataKuliahName(item.mataKuliahId)} ${service.getDosenPengajarNames(item.id)} ${item.hari} ${item.jam} ${service.getRuanganName(item.ruangan)}',
+            itemBuilder: (context, item, index) => AnimatedEntrance(
+              delay: Duration(milliseconds: index * 80),
               child: InfoTile(
                 icon: Icons.event_available_outlined,
-                title: kelas[i].id,
+                title: item.id,
                 subtitle:
-                    '${service.getMataKuliahName(kelas[i].mataKuliahId)}\nDosen: ${service.getDosenPengajarNames(kelas[i].id)}\n${kelas[i].hari}, ${kelas[i].jam} - ${service.getRuanganName(kelas[i].ruangan)}\nKapasitas: ${service.getJumlahPesertaKelas(kelas[i].id)}/${kelas[i].kapasitas}',
+                    '${service.getMataKuliahName(item.mataKuliahId)}\nDosen: ${service.getDosenPengajarNames(item.id)}\n${item.hari}, ${item.jam} - ${service.getRuanganName(item.ruangan)}\nKapasitas: ${service.getJumlahPesertaKelas(item.id)}/${item.kapasitas}',
                 trailing: _CrudMenu(
-                  onEdit: () => _editKelas(context, kelas[i]),
-                  onDelete: () => _deleteKelas(context, kelas[i].id),
+                  onEdit: () => _editKelas(context, item),
+                  onDelete: () => _deleteKelas(context, item.id),
                 ),
               ),
             ),
+          ),
         ],
       ),
     );
@@ -434,21 +516,31 @@ class ProdiUserView extends StatelessWidget {
   Widget build(BuildContext context) {
     // Halaman ini menampilkan akun yang berada dalam scope prodi aktif.
     final service = context.watch<MockService>();
+    final users = service.users
+        .where(
+          (item) =>
+              item.role == Role.dosen ||
+              item.role == Role.mahasiswa ||
+              item.role == Role.adminProdi,
+        )
+        .toList();
+
     return AppScaffold(
       title: 'User Prodi',
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (final user in service.users.where(
-            (item) =>
-                item.role == Role.dosen ||
-                item.role == Role.mahasiswa ||
-                item.role == Role.adminProdi,
-          ))
-            InfoTile(
+          _SearchableList<User>(
+            items: users,
+            hintText: 'Cari nama, username, role, atau scope',
+            searchableText: (user) =>
+                '${user.name} ${user.username} ${user.role.label} ${user.scopeId}',
+            itemBuilder: (context, user, index) => InfoTile(
               icon: Icons.person_outline,
               title: user.name,
               subtitle: '${user.username} - ${user.role.label}',
             ),
+          ),
         ],
       ),
     );
@@ -591,13 +683,19 @@ class UserManagementView extends StatelessWidget {
         label: const Text('Tambah Admin'),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (final user in visibleUsers)
-            InfoTile(
+          _SearchableList<User>(
+            items: visibleUsers,
+            hintText: 'Cari nama, username, role, atau scope',
+            searchableText: (user) =>
+                '${user.name} ${user.username} ${user.role.label} ${user.scopeId}',
+            itemBuilder: (context, user, index) => InfoTile(
               icon: Icons.admin_panel_settings_outlined,
               title: user.name,
               subtitle: '${user.username} - ${user.role.label}',
             ),
+          ),
         ],
       ),
     );
@@ -624,20 +722,150 @@ class _StatRow extends StatelessWidget {
   }
 }
 
-class _SectionTitle extends StatelessWidget {
-  const _SectionTitle(this.text);
+class _SearchableList<T> extends StatefulWidget {
+  const _SearchableList({
+    required this.items,
+    required this.searchableText,
+    required this.itemBuilder,
+    required this.hintText,
+  });
 
-  final String text;
+  final List<T> items;
+  final String Function(T item) searchableText;
+  final Widget Function(BuildContext context, T item, int index) itemBuilder;
+  final String hintText;
+
+  @override
+  State<_SearchableList<T>> createState() => _SearchableListState<T>();
+}
+
+class _SearchableListState<T> extends State<_SearchableList<T>> {
+  final TextEditingController _controller = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Text(
-        text,
-        style: Theme.of(
-          context,
-        ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+    final normalizedQuery = _normalize(_query);
+    final filtered = normalizedQuery.isEmpty
+        ? widget.items
+        : widget.items
+              .where(
+                (item) => _normalize(
+                  widget.searchableText(item),
+                ).contains(normalizedQuery),
+              )
+              .toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SearchField(
+          controller: _controller,
+          hintText: widget.hintText,
+          onChanged: (value) => setState(() => _query = value),
+          onClear: _query.isEmpty
+              ? null
+              : () {
+                  _controller.clear();
+                  setState(() => _query = '');
+                },
+        ),
+        const SizedBox(height: 14),
+        if (filtered.isEmpty)
+          _EmptySearchResult(query: _query)
+        else
+          for (int i = 0; i < filtered.length; i++)
+            widget.itemBuilder(context, filtered[i], i),
+      ],
+    );
+  }
+
+  String _normalize(String value) => value.toLowerCase().trim();
+}
+
+class _SearchField extends StatelessWidget {
+  const _SearchField({
+    required this.controller,
+    required this.hintText,
+    required this.onChanged,
+    required this.onClear,
+  });
+
+  final TextEditingController controller;
+  final String hintText;
+  final ValueChanged<String> onChanged;
+  final VoidCallback? onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return TextField(
+      controller: controller,
+      onChanged: onChanged,
+      textInputAction: TextInputAction.search,
+      decoration: InputDecoration(
+        hintText: hintText,
+        prefixIcon: const Icon(Icons.search_rounded),
+        suffixIcon: onClear == null
+            ? null
+            : IconButton(
+                tooltip: 'Bersihkan pencarian',
+                onPressed: onClear,
+                icon: const Icon(Icons.close_rounded),
+              ),
+        filled: true,
+        fillColor: scheme.surface,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: scheme.outlineVariant),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: BorderSide(color: scheme.outlineVariant),
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptySearchResult extends StatelessWidget {
+  const _EmptySearchResult({required this.query});
+
+  final String query;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Row(
+          children: [
+            Icon(
+              Icons.search_off_rounded,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                query.trim().isEmpty
+                    ? 'Belum ada data yang tersedia'
+                    : 'Tidak ada data yang cocok dengan "$query"',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

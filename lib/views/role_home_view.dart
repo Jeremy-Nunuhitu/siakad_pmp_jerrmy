@@ -29,24 +29,45 @@ class _RoleHomeViewState extends State<RoleHomeView> {
     // Jika tidak ada sesi aktif, user dikembalikan ke login.
     if (user == null) return const LoginView();
 
-    // Role menentukan menu bawah dan halaman yang boleh diakses.
+    // Role menentukan menu navigasi dan halaman yang boleh diakses.
     final config = _RoleNavConfig.fromRole(user.role);
     final pageBuilders = config.pageBuilders(user, _logout, (index) {
       _selectIndex(index);
     });
     if (_index >= pageBuilders.length) _index = pageBuilders.length - 1;
 
-    return Scaffold(
-      body: _LazyRolePageStack(
-        key: ValueKey('${user.id}-${user.role.name}'),
-        index: _index,
-        pageBuilders: pageBuilders,
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: _selectIndex,
-        destinations: config.destinations,
-      ),
+    final pageStack = _LazyRolePageStack(
+      key: ValueKey('${user.id}-${user.role.name}'),
+      index: _index,
+      pageBuilders: pageBuilders,
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final useTopBar = constraints.maxWidth >= 900;
+
+        return Scaffold(
+          body: useTopBar
+              ? Column(
+                  children: [
+                    _DesktopTopBar(
+                      selectedIndex: _index,
+                      destinations: config.destinations,
+                      onDestinationSelected: _selectIndex,
+                    ),
+                    Expanded(child: pageStack),
+                  ],
+                )
+              : pageStack,
+          bottomNavigationBar: useTopBar
+              ? null
+              : NavigationBar(
+                  selectedIndex: _index,
+                  onDestinationSelected: _selectIndex,
+                  destinations: config.destinations,
+                ),
+        );
+      },
     );
   }
 
@@ -66,6 +87,156 @@ class _RoleHomeViewState extends State<RoleHomeView> {
 }
 
 typedef _RolePageBuilder = Widget Function();
+
+class _DesktopTopBar extends StatelessWidget {
+  const _DesktopTopBar({
+    required this.selectedIndex,
+    required this.destinations,
+    required this.onDestinationSelected,
+  });
+
+  final int selectedIndex;
+  final List<NavigationDestination> destinations;
+  final ValueChanged<int> onDestinationSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final themeVm = context.watch<ThemeViewModel>();
+
+    return SafeArea(
+      bottom: false,
+      child: Material(
+        color: scheme.surface,
+        elevation: 0,
+        child: Container(
+          height: 72,
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: scheme.outlineVariant.withValues(alpha: 0.52),
+              ),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            child: Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: scheme.primary.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: scheme.primary.withValues(alpha: 0.18),
+                    ),
+                  ),
+                  child: Icon(
+                    Icons.school_outlined,
+                    color: scheme.primary,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'SIAKAD',
+                  style: TextStyle(
+                    color: scheme.onSurface,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 18,
+                  ),
+                ),
+                const SizedBox(width: 24),
+                Expanded(
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: destinations.length,
+                    separatorBuilder: (_, _) => const SizedBox(width: 6),
+                    itemBuilder: (context, index) {
+                      final destination = destinations[index];
+                      final selected = index == selectedIndex;
+
+                      return Tooltip(
+                        message: destination.label,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(8),
+                          onTap: () => onDestinationSelected(index),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 160),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 13,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: selected
+                                  ? scheme.primary.withValues(alpha: 0.11)
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: selected
+                                    ? scheme.primary.withValues(alpha: 0.24)
+                                    : Colors.transparent,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconTheme(
+                                  data: IconThemeData(
+                                    color: selected
+                                        ? scheme.primary
+                                        : scheme.onSurface.withValues(
+                                            alpha: 0.62,
+                                          ),
+                                    size: 21,
+                                  ),
+                                  child: destination.icon,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  destination.label,
+                                  style: TextStyle(
+                                    color: selected
+                                        ? scheme.primary
+                                        : scheme.onSurface.withValues(
+                                            alpha: 0.72,
+                                          ),
+                                    fontWeight: selected
+                                        ? FontWeight.w800
+                                        : FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Tooltip(
+                  message: themeVm.isDarkMode
+                      ? 'Gunakan tema terang'
+                      : 'Gunakan tema gelap',
+                  child: IconButton.filledTonal(
+                    onPressed: () => themeVm.toggleTheme(),
+                    icon: Icon(
+                      themeVm.isDarkMode
+                          ? Icons.light_mode_outlined
+                          : Icons.dark_mode_outlined,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class _LazyRolePageStack extends StatefulWidget {
   const _LazyRolePageStack({
@@ -249,6 +420,190 @@ class RoleDashboard extends StatelessWidget {
   }
 }
 
+class AdminProdiDashboard extends StatelessWidget {
+  const AdminProdiDashboard({required this.user, super.key});
+
+  final User user;
+
+  @override
+  Widget build(BuildContext context) {
+    final service = context.watch<MockService>();
+    final prodiId = user.scopeId;
+    final mahasiswaCount = service.mahasiswa
+        .where((item) => item.prodiId == prodiId)
+        .length;
+    final dosenCount = service.dosen
+        .where((item) => item.prodiId == prodiId)
+        .length;
+    final mataKuliahCount = service.mataKuliah
+        .where((item) => item.prodiId == prodiId)
+        .length;
+    final kelasCount = service.kelas.where((kelas) {
+      final mataKuliah = service.mataKuliah.where(
+        (item) => item.kode == kelas.mataKuliahId,
+      );
+      return mataKuliah.isNotEmpty && mataKuliah.first.prodiId == prodiId;
+    }).length;
+    final ruanganCount = service.ruangan.length;
+
+    return AppScaffold(
+      title: 'Dashboard',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 28,
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    child: Text(
+                      user.name.substring(0, 1),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.secondary,
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          user.name,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w900),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          user.role.label,
+                          style: TextStyle(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSurface.withValues(alpha: 0.6),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          GridView.count(
+            crossAxisCount: MediaQuery.sizeOf(context).width >= 1180
+                ? 5
+                : MediaQuery.sizeOf(context).width >= 760
+                ? 3
+                : 2,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+            childAspectRatio: MediaQuery.sizeOf(context).width >= 900
+                ? 1.85
+                : 1.45,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            children: [
+              _DashboardStatCard(
+                icon: Icons.groups_outlined,
+                label: 'Mahasiswa Aktif',
+                value: mahasiswaCount,
+              ),
+              _DashboardStatCard(
+                icon: Icons.co_present_outlined,
+                label: 'Dosen',
+                value: dosenCount,
+              ),
+              _DashboardStatCard(
+                icon: Icons.menu_book_outlined,
+                label: 'Mata Kuliah',
+                value: mataKuliahCount,
+              ),
+              _DashboardStatCard(
+                icon: Icons.meeting_room_outlined,
+                label: 'Ruang Kelas',
+                value: ruanganCount,
+              ),
+              _DashboardStatCard(
+                icon: Icons.class_outlined,
+                label: 'Kelas Kuliah',
+                value: kelasCount,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DashboardStatCard extends StatelessWidget {
+  const _DashboardStatCard({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final int value;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: scheme.primary.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, color: scheme.primary),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '$value',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      color: scheme.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    label,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      color: scheme.onSurface.withValues(alpha: 0.62),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class ProfileView extends StatelessWidget {
   const ProfileView({required this.user, required this.onLogout, super.key});
 
@@ -365,18 +720,13 @@ class _RoleNavConfig {
         );
       case Role.adminProdi:
         return _RoleNavConfig(
-          destinations: _adminDestinations,
+          destinations: _adminProdiDestinations,
           pageBuilders: (user, logout, selectTab) => [
-            () => RoleDashboard(
-              user: user,
-              flow: const [
-                'Input Mahasiswa, Dosen, Mata Kuliah',
-                'Buka Kelas Kuliah dengan kapasitas peserta',
-                'Kelas Kuliah menjadi pilihan KRS mahasiswa',
-              ],
-              actions: const [],
-            ),
-            () => ProdiCoreDataView(prodiId: user.scopeId),
+            () => AdminProdiDashboard(user: user),
+            () => MahasiswaManagementView(prodiId: user.scopeId),
+            () => DosenManagementView(prodiId: user.scopeId),
+            () => MataKuliahManagementView(prodiId: user.scopeId),
+            () => const RuanganManagementView(),
             () => KelasManagementView(prodiId: user.scopeId),
             () => ProdiUserView(prodiId: user.scopeId),
             () => ProfileView(user: user, onLogout: logout),
@@ -444,6 +794,23 @@ const _adminDestinations = [
   NavigationDestination(icon: Icon(Icons.dashboard_outlined), label: 'Home'),
   NavigationDestination(icon: Icon(Icons.storage_outlined), label: 'Data'),
   NavigationDestination(icon: Icon(Icons.tune_outlined), label: 'Manajemen'),
+  NavigationDestination(icon: Icon(Icons.group_outlined), label: 'User'),
+  NavigationDestination(icon: Icon(Icons.person_outline), label: 'Profil'),
+];
+
+const _adminProdiDestinations = [
+  NavigationDestination(icon: Icon(Icons.dashboard_outlined), label: 'Home'),
+  NavigationDestination(icon: Icon(Icons.groups_outlined), label: 'Mahasiswa'),
+  NavigationDestination(icon: Icon(Icons.co_present_outlined), label: 'Dosen'),
+  NavigationDestination(
+    icon: Icon(Icons.menu_book_outlined),
+    label: 'Mata Kuliah',
+  ),
+  NavigationDestination(
+    icon: Icon(Icons.meeting_room_outlined),
+    label: 'Ruangan',
+  ),
+  NavigationDestination(icon: Icon(Icons.class_outlined), label: 'Kelas'),
   NavigationDestination(icon: Icon(Icons.group_outlined), label: 'User'),
   NavigationDestination(icon: Icon(Icons.person_outline), label: 'Profil'),
 ];

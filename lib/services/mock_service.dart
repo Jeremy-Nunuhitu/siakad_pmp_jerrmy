@@ -1,10 +1,118 @@
+import 'dart:async';
 import 'dart:collection';
+import 'dart:convert';
+import 'dart:ffi';
+import 'dart:io';
+
+import 'package:path/path.dart' as p;
+// ignore: implementation_imports
+import 'package:sqlite3/src/ffi/load_library.dart' as sqlite_loader;
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../models/siakad_models.dart';
 
 class MockService {
-  // Data di bawah berperan sebagai database sementara selama aplikasi berjalan.
-  // Karena tersimpan di memory, data akan kembali ke default saat app direstart.
+  MockService._(this._db);
+
+  static const _databaseName = 'siakad_jeremy.sqlite';
+  static const _stateTable = 'app_state';
+
+  final Database _db;
+
+  static Future<MockService> create() async {
+    _configureSqliteLibrary();
+    sqfliteFfiInit();
+    final dir = await _databaseDirectory();
+    final databasePath = p.join(dir.path, _databaseName);
+    await dir.create(recursive: true);
+
+    final db = await databaseFactoryFfi.openDatabase(databasePath);
+    final service = MockService._(db);
+    await service._createSchema();
+    if (await service._hasSavedState()) {
+      await service._loadState();
+    } else {
+      service._seedPertemuanDefaults();
+      await service._saveAllAsync();
+    }
+    return service;
+  }
+
+  static void _configureSqliteLibrary() {
+    if (!Platform.isWindows) return;
+
+    sqlite_loader.open.overrideFor(
+      sqlite_loader.OperatingSystem.windows,
+      _openWindowsSqlite,
+    );
+  }
+
+  static DynamicLibrary _openWindowsSqlite() {
+    for (final path in _windowsSqliteCandidates()) {
+      if (File(path).existsSync()) {
+        return DynamicLibrary.open(path);
+      }
+    }
+    return DynamicLibrary.open('sqlite3.dll');
+  }
+
+  static List<String> _windowsSqliteCandidates() {
+    final executableDir = p.dirname(Platform.resolvedExecutable);
+    final currentDir = Directory.current.path;
+    return [
+      p.join(executableDir, 'sqlite3.dll'),
+      p.join(currentDir, 'sqlite3.dll'),
+      p.join(
+        currentDir,
+        'build',
+        'windows',
+        'x64',
+        'runner',
+        'Debug',
+        'sqlite3.dll',
+      ),
+      p.join(
+        currentDir,
+        'build',
+        'windows',
+        'x64',
+        'runner',
+        'Release',
+        'sqlite3.dll',
+      ),
+      p.join(currentDir, 'build', 'native_assets', 'windows', 'sqlite3.dll'),
+    ];
+  }
+
+  static Future<Directory> _databaseDirectory() async {
+    if (Platform.isWindows) {
+      final base =
+          Platform.environment['APPDATA'] ??
+          Platform.environment['LOCALAPPDATA'] ??
+          Directory.current.path;
+      return Directory(p.join(base, 'siakad_jeremy'));
+    }
+    if (Platform.isMacOS) {
+      final home = Platform.environment['HOME'] ?? Directory.current.path;
+      return Directory(
+        p.join(home, 'Library', 'Application Support', 'siakad_jeremy'),
+      );
+    }
+    if (Platform.isLinux) {
+      final base =
+          Platform.environment['XDG_DATA_HOME'] ??
+          p.join(
+            Platform.environment['HOME'] ?? Directory.current.path,
+            '.local',
+            'share',
+          );
+      return Directory(p.join(base, 'siakad_jeremy'));
+    }
+    return Directory(p.join(Directory.systemTemp.path, 'siakad_jeremy'));
+  }
+
+  // Data default ini dipakai sebagai seed pertama, lalu perubahan berikutnya
+  // disimpan ke file SQLite di storage aplikasi.
   final List<User> _users = [
     const User(
       id: 'u-001',
@@ -291,9 +399,7 @@ class MockService {
   late final List<Pertemuan> pertemuan = UnmodifiableListView(_pertemuan);
   late final List<Presensi> presensi = UnmodifiableListView(_presensi);
 
-  MockService() {
-    // Saat service dibuat, setiap kelas default langsung disiapkan
-    // dengan 16 pertemuan agar dosen bisa mengelola presensi.
+  void _seedPertemuanDefaults() {
     for (final k in _kelas) {
       for (int i = 1; i <= 16; i++) {
         _pertemuan.add(
@@ -378,7 +484,7 @@ class MockService {
         scopeId: fakultasId,
       ),
     );
-    return 'Fakultas dan Admin berhasil ditambahkan';
+    return _saved('Fakultas dan Admin berhasil ditambahkan');
   }
 
   String addProdi(
@@ -417,7 +523,7 @@ class MockService {
         scopeId: prodiId,
       ),
     );
-    return 'Prodi dan Admin berhasil ditambahkan';
+    return _saved('Prodi dan Admin berhasil ditambahkan');
   }
 
   String updateProdi(String id, String nama, String fakultasId) {
@@ -426,7 +532,7 @@ class MockService {
     if (index == -1) throw StateError('Prodi tidak ditemukan');
     _ensureExists(_fakultas.any((item) => item.id == fakultasId), 'Fakultas');
     _prodi[index] = Prodi(id: id, nama: nama, fakultasId: fakultasId);
-    return 'Prodi berhasil diperbarui';
+    return _saved('Prodi berhasil diperbarui');
   }
 
   String deleteProdi(String id) {
@@ -440,7 +546,7 @@ class MockService {
     _users.removeWhere(
       (item) => item.role == Role.adminProdi && item.scopeId == id,
     );
-    return 'Prodi berhasil dihapus';
+    return _saved('Prodi berhasil dihapus');
   }
 
   String addMahasiswa(
@@ -471,7 +577,9 @@ class MockService {
       ),
     );
 
-    return 'Mahasiswa berhasil ditambahkan (Password default: password)';
+    return _saved(
+      'Mahasiswa berhasil ditambahkan (Password default: password)',
+    );
   }
 
   String updateMahasiswa({
@@ -498,7 +606,7 @@ class MockService {
       noHp: _mahasiswa[index].noHp,
       alamat: _mahasiswa[index].alamat,
     );
-    return 'Mahasiswa berhasil diperbarui';
+    return _saved('Mahasiswa berhasil diperbarui');
   }
 
   String updateProfilMahasiswa({
@@ -523,7 +631,7 @@ class MockService {
       noHp: noHp.trim(),
       alamat: alamat.trim(),
     );
-    return 'Profil berhasil diperbarui';
+    return _saved('Profil berhasil diperbarui');
   }
 
   String deleteMahasiswa(String nim) {
@@ -535,7 +643,7 @@ class MockService {
     _mahasiswa.removeWhere((item) => item.nim == nim);
     _nilai.removeWhere((item) => item.mahasiswaId == nim);
     _presensi.removeWhere((item) => item.mahasiswaId == nim);
-    return 'Mahasiswa berhasil dihapus';
+    return _saved('Mahasiswa berhasil dihapus');
   }
 
   String addDosen(String nidn, String nama, String prodiId) {
@@ -550,7 +658,7 @@ class MockService {
       Dosen(nidn: nidn, nama: nama, prodiId: prodiId, password: 'password'),
     );
 
-    return 'Dosen berhasil ditambahkan (Password default: password)';
+    return _saved('Dosen berhasil ditambahkan (Password default: password)');
   }
 
   String updateDosen({
@@ -571,7 +679,7 @@ class MockService {
       alamat: _dosen[index].alamat,
       keahlian: _dosen[index].keahlian,
     );
-    return 'Dosen berhasil diperbarui';
+    return _saved('Dosen berhasil diperbarui');
   }
 
   String updateProfilDosen({
@@ -590,7 +698,7 @@ class MockService {
       alamat: alamat.trim(),
       keahlian: keahlian.trim(),
     );
-    return 'Profil dosen berhasil diperbarui';
+    return _saved('Profil dosen berhasil diperbarui');
   }
 
   String deleteDosen(String nidn) {
@@ -600,7 +708,7 @@ class MockService {
       'Dosen tanpa kelas aktif',
     );
     _dosen.removeWhere((item) => item.nidn == nidn);
-    return 'Dosen berhasil dihapus';
+    return _saved('Dosen berhasil dihapus');
   }
 
   String addAdmin(String username, String nama, Role role, String scopeId) {
@@ -619,7 +727,7 @@ class MockService {
         scopeId: scopeId,
       ),
     );
-    return '${role.label} berhasil ditambahkan';
+    return _saved('${role.label} berhasil ditambahkan');
   }
 
   String addMataKuliah(String kode, String nama, int sks, String prodiId) {
@@ -634,7 +742,7 @@ class MockService {
     _mataKuliah.add(
       MataKuliah(kode: kode, nama: nama, sks: sks, prodiId: prodiId),
     );
-    return 'Mata kuliah berhasil ditambahkan';
+    return _saved('Mata kuliah berhasil ditambahkan');
   }
 
   String updateMataKuliah({
@@ -653,7 +761,7 @@ class MockService {
       sks: sks,
       prodiId: prodiId,
     );
-    return 'Mata kuliah berhasil diperbarui';
+    return _saved('Mata kuliah berhasil diperbarui');
   }
 
   String deleteMataKuliah(String kode) {
@@ -662,7 +770,7 @@ class MockService {
       throw StateError('Mata kuliah masih dipakai pada kelas kuliah');
     }
     _mataKuliah.removeWhere((item) => item.kode == kode);
-    return 'Mata kuliah berhasil dihapus';
+    return _saved('Mata kuliah berhasil dihapus');
   }
 
   String addRuangan({
@@ -692,7 +800,7 @@ class MockService {
         lokasi: lokasi.trim(),
       ),
     );
-    return 'Ruangan berhasil ditambahkan';
+    return _saved('Ruangan berhasil ditambahkan');
   }
 
   String updateRuangan({
@@ -728,7 +836,7 @@ class MockService {
       kapasitasRuangan: kapasitasRuangan,
       lokasi: lokasi.trim(),
     );
-    return 'Ruangan berhasil diperbarui';
+    return _saved('Ruangan berhasil diperbarui');
   }
 
   String deleteRuangan(String kodeRuangan) {
@@ -736,7 +844,7 @@ class MockService {
       throw StateError('Ruangan masih digunakan kelas kuliah');
     }
     _ruangan.removeWhere((item) => item.kodeRuangan == kodeRuangan);
-    return 'Ruangan berhasil dihapus';
+    return _saved('Ruangan berhasil dihapus');
   }
 
   String openKelas({
@@ -797,7 +905,7 @@ class MockService {
       );
     }
 
-    return 'Kelas berhasil dibuka';
+    return _saved('Kelas berhasil dibuka');
   }
 
   String updateKelas({
@@ -843,7 +951,7 @@ class MockService {
       ruangan: ruangan.trim().toUpperCase(),
     );
     _syncDosenPengajarUtama(id, dosenId);
-    return 'Kelas berhasil diperbarui';
+    return _saved('Kelas berhasil diperbarui');
   }
 
   String deleteKelas(String id) {
@@ -854,7 +962,7 @@ class MockService {
     _dosenPengajar.removeWhere((item) => item.idKelas == id);
     _pertemuan.removeWhere((item) => item.kelasId == id);
     _tugas.removeWhere((item) => item.kelasId == id);
-    return 'Kelas berhasil dihapus';
+    return _saved('Kelas berhasil dihapus');
   }
 
   String takeKrs(String mahasiswaId, String kelasId) {
@@ -902,7 +1010,7 @@ class MockService {
         isValidated: false,
       ),
     );
-    return 'KRS berhasil disimpan sebagai draft';
+    return _saved('KRS berhasil disimpan sebagai draft');
   }
 
   String submitKrs(String mahasiswaId, int semester) {
@@ -929,7 +1037,7 @@ class MockService {
         catatanDosenPa: '',
       );
     }
-    return 'KRS berhasil diajukan ke dosen pembimbing akademik';
+    return _saved('KRS berhasil diajukan ke dosen pembimbing akademik');
   }
 
   String validateKrs(String krsId, String dosenId) {
@@ -957,7 +1065,7 @@ class MockService {
         );
       }
     }
-    return 'KRS berhasil disetujui';
+    return _saved('KRS berhasil disetujui');
   }
 
   String rejectKrs(String krsId, String dosenId, String catatan) {
@@ -987,7 +1095,7 @@ class MockService {
         );
       }
     }
-    return 'KRS ditolak dengan catatan';
+    return _saved('KRS ditolak dengan catatan');
   }
 
   String removeKrs(String krsId, String mahasiswaId) {
@@ -999,7 +1107,7 @@ class MockService {
       throw StateError('KRS yang sudah diajukan/disetujui tidak bisa dihapus');
     }
     _krs.removeAt(index);
-    return 'Kelas berhasil dihapus dari KRS';
+    return _saved('Kelas berhasil dihapus dari KRS');
   }
 
   String inputNilai({
@@ -1043,7 +1151,7 @@ class MockService {
         nilaiSoftskill: softskill ?? angka,
       ),
     );
-    return 'Nilai berhasil disimpan';
+    return _saved('Nilai berhasil disimpan');
   }
 
   String getMataKuliahName(String kode) {
@@ -1130,6 +1238,503 @@ class MockService {
     }
   }
 
+  Future<void> _createSchema() {
+    return _db.execute('''
+      CREATE TABLE IF NOT EXISTS $_stateTable (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      )
+    ''');
+  }
+
+  Future<bool> _hasSavedState() async {
+    final result = await _db.rawQuery(
+      'SELECT COUNT(*) AS total FROM $_stateTable WHERE key = ?',
+      ['users'],
+    );
+    return (result.first['total'] as int) > 0;
+  }
+
+  Future<void> _loadState() async {
+    _users
+      ..clear()
+      ..addAll(await _readList('users', _userFromJson));
+    _fakultas
+      ..clear()
+      ..addAll(await _readList('fakultas', _fakultasFromJson));
+    _prodi
+      ..clear()
+      ..addAll(await _readList('prodi', _prodiFromJson));
+    _mahasiswa
+      ..clear()
+      ..addAll(await _readList('mahasiswa', _mahasiswaFromJson));
+    _dosen
+      ..clear()
+      ..addAll(await _readList('dosen', _dosenFromJson));
+    _mataKuliah
+      ..clear()
+      ..addAll(await _readList('mataKuliah', _mataKuliahFromJson));
+    _ruangan
+      ..clear()
+      ..addAll(await _readList('ruangan', _ruanganFromJson));
+    _kelas
+      ..clear()
+      ..addAll(await _readList('kelas', _kelasFromJson));
+    _dosenPengajar
+      ..clear()
+      ..addAll(await _readList('dosenPengajar', _dosenPengajarFromJson));
+    _krs
+      ..clear()
+      ..addAll(await _readList('krs', _krsFromJson));
+    _nilai
+      ..clear()
+      ..addAll(await _readList('nilai', _nilaiFromJson));
+    _tugas
+      ..clear()
+      ..addAll(await _readList('tugas', _tugasFromJson));
+    _skripsi
+      ..clear()
+      ..addAll(await _readList('skripsi', _skripsiFromJson));
+    _magang
+      ..clear()
+      ..addAll(await _readList('magang', _magangFromJson));
+    _kkn
+      ..clear()
+      ..addAll(await _readList('kkn', _kknFromJson));
+    _pertemuan
+      ..clear()
+      ..addAll(await _readList('pertemuan', _pertemuanFromJson));
+    _presensi
+      ..clear()
+      ..addAll(await _readList('presensi', _presensiFromJson));
+  }
+
+  Future<List<T>> _readList<T>(
+    String key,
+    T Function(Map<String, dynamic>) fromJson,
+  ) async {
+    final result = await _db.query(
+      _stateTable,
+      columns: ['value'],
+      where: 'key = ?',
+      whereArgs: [key],
+      limit: 1,
+    );
+    if (result.isEmpty) return [];
+    final rows = jsonDecode(result.first['value'] as String) as List<dynamic>;
+    return rows.map((row) => fromJson(_jsonMap(row))).toList();
+  }
+
+  void _saveAll() {
+    unawaited(_saveAllAsync());
+  }
+
+  Future<void> _saveAllAsync() {
+    return _db.transaction((txn) async {
+      await _writeList(txn, 'users', _users.map(_userToJson).toList());
+      await _writeList(
+        txn,
+        'fakultas',
+        _fakultas.map(_fakultasToJson).toList(),
+      );
+      await _writeList(txn, 'prodi', _prodi.map(_prodiToJson).toList());
+      await _writeList(
+        txn,
+        'mahasiswa',
+        _mahasiswa.map(_mahasiswaToJson).toList(),
+      );
+      await _writeList(txn, 'dosen', _dosen.map(_dosenToJson).toList());
+      await _writeList(
+        txn,
+        'mataKuliah',
+        _mataKuliah.map(_mataKuliahToJson).toList(),
+      );
+      await _writeList(txn, 'ruangan', _ruangan.map(_ruanganToJson).toList());
+      await _writeList(txn, 'kelas', _kelas.map(_kelasToJson).toList());
+      await _writeList(
+        txn,
+        'dosenPengajar',
+        _dosenPengajar.map(_dosenPengajarToJson).toList(),
+      );
+      await _writeList(txn, 'krs', _krs.map(_krsToJson).toList());
+      await _writeList(txn, 'nilai', _nilai.map(_nilaiToJson).toList());
+      await _writeList(txn, 'tugas', _tugas.map(_tugasToJson).toList());
+      await _writeList(txn, 'skripsi', _skripsi.map(_skripsiToJson).toList());
+      await _writeList(txn, 'magang', _magang.map(_magangToJson).toList());
+      await _writeList(txn, 'kkn', _kkn.map(_kknToJson).toList());
+      await _writeList(
+        txn,
+        'pertemuan',
+        _pertemuan.map(_pertemuanToJson).toList(),
+      );
+      await _writeList(
+        txn,
+        'presensi',
+        _presensi.map(_presensiToJson).toList(),
+      );
+    });
+  }
+
+  String _saved(String message) {
+    _saveAll();
+    return message;
+  }
+
+  Future<void> _writeList(
+    DatabaseExecutor executor,
+    String key,
+    List<Map<String, Object?>> rows,
+  ) {
+    return executor.insert(_stateTable, {
+      'key': key,
+      'value': jsonEncode(rows),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Map<String, dynamic> _jsonMap(Object? value) {
+    return Map<String, dynamic>.from(value as Map);
+  }
+
+  int _boolToInt(bool value) => value ? 1 : 0;
+
+  bool _boolFromJson(Object? value) {
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    return value == 'true';
+  }
+
+  DateTime _dateFromJson(Object? value) => DateTime.parse(value as String);
+
+  DateTime? _nullableDateFromJson(Object? value) {
+    if (value == null || value == '') return null;
+    return DateTime.parse(value as String);
+  }
+
+  StatusPengajuan _statusPengajuanFromJson(Object? value) {
+    return StatusPengajuan.values.firstWhere(
+      (item) => item.name == value,
+      orElse: () => StatusPengajuan.diajukan,
+    );
+  }
+
+  StatusPertemuan _statusPertemuanFromJson(Object? value) {
+    return StatusPertemuan.values.firstWhere(
+      (item) => item.name == value,
+      orElse: () => StatusPertemuan.belumDimulai,
+    );
+  }
+
+  Map<String, Object?> _userToJson(User item) => {
+    'id': item.id,
+    'username': item.username,
+    'password': item.password,
+    'role': item.role.name,
+    'name': item.name,
+    'scopeId': item.scopeId,
+  };
+
+  User _userFromJson(Map<String, dynamic> json) => User(
+    id: json['id'] as String,
+    username: json['username'] as String,
+    password: json['password'] as String,
+    role: Role.values.firstWhere((item) => item.name == json['role']),
+    name: json['name'] as String,
+    scopeId: json['scopeId'] as String,
+  );
+
+  Map<String, Object?> _fakultasToJson(Fakultas item) => {
+    'id': item.id,
+    'nama': item.nama,
+  };
+
+  Fakultas _fakultasFromJson(Map<String, dynamic> json) =>
+      Fakultas(id: json['id'] as String, nama: json['nama'] as String);
+
+  Map<String, Object?> _prodiToJson(Prodi item) => {
+    'id': item.id,
+    'nama': item.nama,
+    'fakultasId': item.fakultasId,
+  };
+
+  Prodi _prodiFromJson(Map<String, dynamic> json) => Prodi(
+    id: json['id'] as String,
+    nama: json['nama'] as String,
+    fakultasId: json['fakultasId'] as String,
+  );
+
+  Map<String, Object?> _mahasiswaToJson(Mahasiswa item) => {
+    'nim': item.nim,
+    'nama': item.nama,
+    'jenisKelamin': item.jenisKelamin,
+    'prodiId': item.prodiId,
+    'password': item.password,
+    'pembimbingAkademikId': item.pembimbingAkademikId,
+    'semester': item.semester,
+    'email': item.email,
+    'noHp': item.noHp,
+    'alamat': item.alamat,
+  };
+
+  Mahasiswa _mahasiswaFromJson(Map<String, dynamic> json) => Mahasiswa(
+    nim: json['nim'] as String,
+    nama: json['nama'] as String,
+    jenisKelamin: json['jenisKelamin'] as String,
+    prodiId: json['prodiId'] as String,
+    password: json['password'] as String,
+    pembimbingAkademikId: json['pembimbingAkademikId'] as String,
+    semester: json['semester'] as int? ?? 1,
+    email: json['email'] as String? ?? '',
+    noHp: json['noHp'] as String? ?? '',
+    alamat: json['alamat'] as String? ?? '',
+  );
+
+  Map<String, Object?> _dosenToJson(Dosen item) => {
+    'nidn': item.nidn,
+    'nama': item.nama,
+    'prodiId': item.prodiId,
+    'password': item.password,
+    'email': item.email,
+    'noHp': item.noHp,
+    'alamat': item.alamat,
+    'keahlian': item.keahlian,
+  };
+
+  Dosen _dosenFromJson(Map<String, dynamic> json) => Dosen(
+    nidn: json['nidn'] as String,
+    nama: json['nama'] as String,
+    prodiId: json['prodiId'] as String,
+    password: json['password'] as String,
+    email: json['email'] as String? ?? '',
+    noHp: json['noHp'] as String? ?? '',
+    alamat: json['alamat'] as String? ?? '',
+    keahlian: json['keahlian'] as String? ?? '',
+  );
+
+  Map<String, Object?> _mataKuliahToJson(MataKuliah item) => {
+    'kode': item.kode,
+    'nama': item.nama,
+    'sks': item.sks,
+    'prodiId': item.prodiId,
+  };
+
+  MataKuliah _mataKuliahFromJson(Map<String, dynamic> json) => MataKuliah(
+    kode: json['kode'] as String,
+    nama: json['nama'] as String,
+    sks: json['sks'] as int,
+    prodiId: json['prodiId'] as String,
+  );
+
+  Map<String, Object?> _ruanganToJson(Ruangan item) => {
+    'kodeRuangan': item.kodeRuangan,
+    'namaRuangan': item.namaRuangan,
+    'kapasitasRuangan': item.kapasitasRuangan,
+    'lokasi': item.lokasi,
+  };
+
+  Ruangan _ruanganFromJson(Map<String, dynamic> json) => Ruangan(
+    kodeRuangan: json['kodeRuangan'] as String,
+    namaRuangan: json['namaRuangan'] as String,
+    kapasitasRuangan: json['kapasitasRuangan'] as int,
+    lokasi: json['lokasi'] as String,
+  );
+
+  Map<String, Object?> _kelasToJson(Kelas item) => {
+    'id': item.id,
+    'mataKuliahId': item.mataKuliahId,
+    'dosenId': item.dosenId,
+    'kapasitas': item.kapasitas,
+    'hari': item.hari,
+    'jam': item.jam,
+    'ruangan': item.ruangan,
+  };
+
+  Kelas _kelasFromJson(Map<String, dynamic> json) => Kelas(
+    id: json['id'] as String,
+    mataKuliahId: json['mataKuliahId'] as String,
+    dosenId: json['dosenId'] as String,
+    kapasitas: json['kapasitas'] as int,
+    hari: json['hari'] as String,
+    jam: json['jam'] as String,
+    ruangan: json['ruangan'] as String,
+  );
+
+  Map<String, Object?> _dosenPengajarToJson(DosenPengajar item) => {
+    'id': item.id,
+    'idKelas': item.idKelas,
+    'nidnDosen': item.nidnDosen,
+    'peranMengajar': item.peranMengajar,
+  };
+
+  DosenPengajar _dosenPengajarFromJson(Map<String, dynamic> json) =>
+      DosenPengajar(
+        id: json['id'] as String,
+        idKelas: json['idKelas'] as String,
+        nidnDosen: json['nidnDosen'] as String,
+        peranMengajar: json['peranMengajar'] as String? ?? 'Dosen Utama',
+      );
+
+  Map<String, Object?> _krsToJson(KRS item) => {
+    'id': item.id,
+    'mahasiswaId': item.mahasiswaId,
+    'kelasId': item.kelasId,
+    'semester': item.semester,
+    'isSubmitted': _boolToInt(item.isSubmitted),
+    'isValidated': _boolToInt(item.isValidated),
+    'isRejected': _boolToInt(item.isRejected),
+    'catatanDosenPa': item.catatanDosenPa,
+  };
+
+  KRS _krsFromJson(Map<String, dynamic> json) => KRS(
+    id: json['id'] as String,
+    mahasiswaId: json['mahasiswaId'] as String,
+    kelasId: json['kelasId'] as String,
+    semester: json['semester'] as int? ?? 1,
+    isSubmitted: _boolFromJson(json['isSubmitted']),
+    isValidated: _boolFromJson(json['isValidated']),
+    isRejected: _boolFromJson(json['isRejected']),
+    catatanDosenPa: json['catatanDosenPa'] as String? ?? '',
+  );
+
+  Map<String, Object?> _nilaiToJson(Nilai item) => {
+    'id': item.id,
+    'mahasiswaId': item.mahasiswaId,
+    'kelasId': item.kelasId,
+    'nilaiAngka': item.nilaiAngka,
+    'nilaiHuruf': item.nilaiHuruf,
+    'semester': item.semester,
+    'nilaiTugas': item.nilaiTugas,
+    'nilaiUts': item.nilaiUts,
+    'nilaiUas': item.nilaiUas,
+    'nilaiSoftskill': item.nilaiSoftskill,
+    'bobotTugas': item.bobotTugas,
+    'bobotUts': item.bobotUts,
+    'bobotUas': item.bobotUas,
+    'bobotSoftskill': item.bobotSoftskill,
+  };
+
+  Nilai _nilaiFromJson(Map<String, dynamic> json) => Nilai(
+    id: json['id'] as String,
+    mahasiswaId: json['mahasiswaId'] as String,
+    kelasId: json['kelasId'] as String,
+    nilaiAngka: (json['nilaiAngka'] as num).toDouble(),
+    nilaiHuruf: json['nilaiHuruf'] as String,
+    semester: json['semester'] as int? ?? 1,
+    nilaiTugas: (json['nilaiTugas'] as num? ?? 0).toDouble(),
+    nilaiUts: (json['nilaiUts'] as num? ?? 0).toDouble(),
+    nilaiUas: (json['nilaiUas'] as num? ?? 0).toDouble(),
+    nilaiSoftskill: (json['nilaiSoftskill'] as num? ?? 0).toDouble(),
+    bobotTugas: (json['bobotTugas'] as num? ?? 25).toDouble(),
+    bobotUts: (json['bobotUts'] as num? ?? 25).toDouble(),
+    bobotUas: (json['bobotUas'] as num? ?? 35).toDouble(),
+    bobotSoftskill: (json['bobotSoftskill'] as num? ?? 15).toDouble(),
+  );
+
+  Map<String, Object?> _tugasToJson(Tugas item) => {
+    'id': item.id,
+    'kelasId': item.kelasId,
+    'judul': item.judul,
+    'deskripsi': item.deskripsi,
+    'deadline': item.deadline.toIso8601String(),
+  };
+
+  Tugas _tugasFromJson(Map<String, dynamic> json) => Tugas(
+    id: json['id'] as String,
+    kelasId: json['kelasId'] as String,
+    judul: json['judul'] as String,
+    deskripsi: json['deskripsi'] as String,
+    deadline: _dateFromJson(json['deadline']),
+  );
+
+  Map<String, Object?> _skripsiToJson(Skripsi item) => {
+    'id': item.id,
+    'mahasiswaId': item.mahasiswaId,
+    'judul': item.judul,
+    'topik': item.topik,
+    'pembimbingId': item.pembimbingId,
+    'dibuatPada': item.dibuatPada.toIso8601String(),
+    'status': item.status.name,
+    'catatan': item.catatan,
+  };
+
+  Skripsi _skripsiFromJson(Map<String, dynamic> json) => Skripsi(
+    id: json['id'] as String,
+    mahasiswaId: json['mahasiswaId'] as String,
+    judul: json['judul'] as String,
+    topik: json['topik'] as String,
+    pembimbingId: json['pembimbingId'] as String,
+    dibuatPada: _dateFromJson(json['dibuatPada']),
+    status: _statusPengajuanFromJson(json['status']),
+    catatan: List<String>.from(json['catatan'] as List? ?? const []),
+  );
+
+  Map<String, Object?> _magangToJson(Magang item) => {
+    'id': item.id,
+    'mahasiswaId': item.mahasiswaId,
+    'instansi': item.instansi,
+    'posisi': item.posisi,
+    'dibuatPada': item.dibuatPada.toIso8601String(),
+    'status': item.status.name,
+  };
+
+  Magang _magangFromJson(Map<String, dynamic> json) => Magang(
+    id: json['id'] as String,
+    mahasiswaId: json['mahasiswaId'] as String,
+    instansi: json['instansi'] as String,
+    posisi: json['posisi'] as String,
+    dibuatPada: _dateFromJson(json['dibuatPada']),
+    status: _statusPengajuanFromJson(json['status']),
+  );
+
+  Map<String, Object?> _kknToJson(Kkn item) => {
+    'id': item.id,
+    'mahasiswaId': item.mahasiswaId,
+    'lokasi': item.lokasi,
+    'tema': item.tema,
+    'dibuatPada': item.dibuatPada.toIso8601String(),
+    'status': item.status.name,
+  };
+
+  Kkn _kknFromJson(Map<String, dynamic> json) => Kkn(
+    id: json['id'] as String,
+    mahasiswaId: json['mahasiswaId'] as String,
+    lokasi: json['lokasi'] as String,
+    tema: json['tema'] as String,
+    dibuatPada: _dateFromJson(json['dibuatPada']),
+    status: _statusPengajuanFromJson(json['status']),
+  );
+
+  Map<String, Object?> _pertemuanToJson(Pertemuan item) => {
+    'id': item.id,
+    'kelasId': item.kelasId,
+    'pertemuanKe': item.pertemuanKe,
+    'status': item.status.name,
+    'materi': item.materi,
+    'waktuMulai': item.waktuMulai?.toIso8601String(),
+  };
+
+  Pertemuan _pertemuanFromJson(Map<String, dynamic> json) => Pertemuan(
+    id: json['id'] as String,
+    kelasId: json['kelasId'] as String,
+    pertemuanKe: json['pertemuanKe'] as int,
+    status: _statusPertemuanFromJson(json['status']),
+    materi: json['materi'] as String?,
+    waktuMulai: _nullableDateFromJson(json['waktuMulai']),
+  );
+
+  Map<String, Object?> _presensiToJson(Presensi item) => {
+    'id': item.id,
+    'pertemuanId': item.pertemuanId,
+    'mahasiswaId': item.mahasiswaId,
+    'statusKehadiran': item.statusKehadiran,
+  };
+
+  Presensi _presensiFromJson(Map<String, dynamic> json) => Presensi(
+    id: json['id'] as String,
+    pertemuanId: json['pertemuanId'] as String,
+    mahasiswaId: json['mahasiswaId'] as String,
+    statusKehadiran: json['statusKehadiran'] as String,
+  );
+
   void _ensureDosenPaValid(String prodiId, String dosenId) {
     _ensureNotBlank(dosenId, 'Dosen PA');
     _ensureExists(
@@ -1162,7 +1767,7 @@ class MockService {
         deadline: deadline,
       ),
     );
-    return 'Tugas berhasil ditambahkan';
+    return _saved('Tugas berhasil ditambahkan');
   }
 
   String mulaiSkripsi({
@@ -1190,7 +1795,7 @@ class MockService {
         dibuatPada: DateTime.now(),
       ),
     );
-    return 'Skripsi berhasil diajukan ke dosen pembimbing';
+    return _saved('Skripsi berhasil diajukan ke dosen pembimbing');
   }
 
   String setujuiSkripsi(String skripsiId, String dosenId) {
@@ -1202,7 +1807,7 @@ class MockService {
     _skripsi[index] = _skripsi[index].copyWith(
       status: StatusPengajuan.disetujui,
     );
-    return 'Skripsi berhasil disetujui';
+    return _saved('Skripsi berhasil disetujui');
   }
 
   String tambahCatatanBimbingan({
@@ -1222,7 +1827,7 @@ class MockService {
         '${DateTime.now().day}/${DateTime.now().month}/${DateTime.now().year}: $catatan',
       ],
     );
-    return 'Catatan bimbingan berhasil disimpan';
+    return _saved('Catatan bimbingan berhasil disimpan');
   }
 
   String ajukanMagang({
@@ -1248,7 +1853,7 @@ class MockService {
         dibuatPada: DateTime.now(),
       ),
     );
-    return 'Pengajuan magang berhasil disimpan';
+    return _saved('Pengajuan magang berhasil disimpan');
   }
 
   String ajukanKkn({
@@ -1274,7 +1879,7 @@ class MockService {
         dibuatPada: DateTime.now(),
       ),
     );
-    return 'Pengajuan KKN berhasil disimpan';
+    return _saved('Pengajuan KKN berhasil disimpan');
   }
 
   void mulaiPertemuan(String pertemuanId, String materi) {
@@ -1292,6 +1897,7 @@ class MockService {
       materi: materi,
       waktuMulai: DateTime.now(),
     );
+    _saveAll();
   }
 
   void selesaikanPertemuan(String pertemuanId) {
@@ -1307,6 +1913,7 @@ class MockService {
     }
 
     _pertemuan[index] = current.copyWith(status: StatusPertemuan.selesai);
+    _saveAll();
   }
 
   void simpanPresensi(String pertemuanId, Map<String, String> statusMap) {
@@ -1332,6 +1939,7 @@ class MockService {
         ),
       );
     });
+    _saveAll();
   }
 
   void _syncDosenPengajarUtama(String kelasId, String dosenId) {

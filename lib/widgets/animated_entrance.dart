@@ -46,14 +46,23 @@ class AnimatedEntrance extends StatelessWidget {
 }
 
 class BlueYellowBackground extends StatelessWidget {
-  const BlueYellowBackground({required this.child, super.key});
+  const BlueYellowBackground({
+    required this.child,
+    this.subtle = false,
+    super.key,
+  });
 
   final Widget child;
+  final bool subtle;
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final gradientColors = isDark
+    final gradientColors = subtle
+        ? isDark
+              ? const [Color(0xFF101214), Color(0xFF15181D)]
+              : const [Color(0xFFF7F9FC), Color(0xFFFFFFFF)]
+        : isDark
         ? const [Color(0xFF0F1113), Color(0xFF141820), Color(0xFF0F1113)]
         : const [Color(0xFFEAF2FF), Color(0xFFFFF8DD), Color(0xFFF7FAFF)];
     final glowColor1 = isDark
@@ -73,16 +82,18 @@ class BlueYellowBackground extends StatelessWidget {
       ),
       child: Stack(
         children: [
-          Positioned(
-            top: -80,
-            right: -58,
-            child: _GlowCircle(size: 190, color: glowColor1),
-          ),
-          Positioned(
-            left: -90,
-            bottom: 90,
-            child: _GlowCircle(size: 210, color: glowColor2),
-          ),
+          if (!subtle) ...[
+            Positioned(
+              top: -80,
+              right: -58,
+              child: _GlowCircle(size: 190, color: glowColor1),
+            ),
+            Positioned(
+              left: -90,
+              bottom: 90,
+              child: _GlowCircle(size: 210, color: glowColor2),
+            ),
+          ],
           child,
         ],
       ),
