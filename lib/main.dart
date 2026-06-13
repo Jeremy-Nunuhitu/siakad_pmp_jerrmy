@@ -28,7 +28,7 @@ class SiakadApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // MockService sekarang memuat dan menyimpan data ke SQLite.
+    // MockService memakai SQLite di native dan data in-memory di Web.
     // Instance ini dibagikan ke semua ViewModel melalui Provider.
     return MultiProvider(
       providers: [

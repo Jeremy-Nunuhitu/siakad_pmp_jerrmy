@@ -1,15 +1,11 @@
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
-import 'dart:ffi';
-import 'dart:io';
 
-import 'package:path/path.dart' as p;
-// ignore: implementation_imports
-import 'package:sqlite3/src/ffi/load_library.dart' as sqlite_loader;
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:sqflite_common/sqlite_api.dart';
 
 import '../models/siakad_models.dart';
+import 'mock_database.dart';
 
 class MockService {
   MockService._(this._db);
@@ -17,17 +13,15 @@ class MockService {
   static const _databaseName = 'siakad_jeremy.sqlite';
   static const _stateTable = 'app_state';
 
-  final Database _db;
+  final Database? _db;
 
   static Future<MockService> create() async {
-    _configureSqliteLibrary();
-    sqfliteFfiInit();
-    final dir = await _databaseDirectory();
-    final databasePath = p.join(dir.path, _databaseName);
-    await dir.create(recursive: true);
-
-    final db = await databaseFactoryFfi.openDatabase(databasePath);
+    final db = await openMockDatabase(_databaseName);
     final service = MockService._(db);
+    if (db == null) {
+      service._seedPertemuanDefaults();
+      return service;
+    }
     await service._createSchema();
     if (await service._hasSavedState()) {
       await service._loadState();
@@ -38,81 +32,8 @@ class MockService {
     return service;
   }
 
-  static void _configureSqliteLibrary() {
-    if (!Platform.isWindows) return;
-
-    sqlite_loader.open.overrideFor(
-      sqlite_loader.OperatingSystem.windows,
-      _openWindowsSqlite,
-    );
-  }
-
-  static DynamicLibrary _openWindowsSqlite() {
-    for (final path in _windowsSqliteCandidates()) {
-      if (File(path).existsSync()) {
-        return DynamicLibrary.open(path);
-      }
-    }
-    return DynamicLibrary.open('sqlite3.dll');
-  }
-
-  static List<String> _windowsSqliteCandidates() {
-    final executableDir = p.dirname(Platform.resolvedExecutable);
-    final currentDir = Directory.current.path;
-    return [
-      p.join(executableDir, 'sqlite3.dll'),
-      p.join(currentDir, 'sqlite3.dll'),
-      p.join(
-        currentDir,
-        'build',
-        'windows',
-        'x64',
-        'runner',
-        'Debug',
-        'sqlite3.dll',
-      ),
-      p.join(
-        currentDir,
-        'build',
-        'windows',
-        'x64',
-        'runner',
-        'Release',
-        'sqlite3.dll',
-      ),
-      p.join(currentDir, 'build', 'native_assets', 'windows', 'sqlite3.dll'),
-    ];
-  }
-
-  static Future<Directory> _databaseDirectory() async {
-    if (Platform.isWindows) {
-      final base =
-          Platform.environment['APPDATA'] ??
-          Platform.environment['LOCALAPPDATA'] ??
-          Directory.current.path;
-      return Directory(p.join(base, 'siakad_jeremy'));
-    }
-    if (Platform.isMacOS) {
-      final home = Platform.environment['HOME'] ?? Directory.current.path;
-      return Directory(
-        p.join(home, 'Library', 'Application Support', 'siakad_jeremy'),
-      );
-    }
-    if (Platform.isLinux) {
-      final base =
-          Platform.environment['XDG_DATA_HOME'] ??
-          p.join(
-            Platform.environment['HOME'] ?? Directory.current.path,
-            '.local',
-            'share',
-          );
-      return Directory(p.join(base, 'siakad_jeremy'));
-    }
-    return Directory(p.join(Directory.systemTemp.path, 'siakad_jeremy'));
-  }
-
-  // Data default ini dipakai sebagai seed pertama, lalu perubahan berikutnya
-  // disimpan ke file SQLite di storage aplikasi.
+  // Data default ini dipakai sebagai seed pertama. Perubahan disimpan ke
+  // SQLite pada platform native dan tetap in-memory pada Web.
   final List<User> _users = [
     const User(
       id: 'u-001',
@@ -1239,7 +1160,7 @@ class MockService {
   }
 
   Future<void> _createSchema() {
-    return _db.execute('''
+    return _db!.execute('''
       CREATE TABLE IF NOT EXISTS $_stateTable (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
@@ -1248,7 +1169,7 @@ class MockService {
   }
 
   Future<bool> _hasSavedState() async {
-    final result = await _db.rawQuery(
+    final result = await _db!.rawQuery(
       'SELECT COUNT(*) AS total FROM $_stateTable WHERE key = ?',
       ['users'],
     );
@@ -1313,7 +1234,7 @@ class MockService {
     String key,
     T Function(Map<String, dynamic>) fromJson,
   ) async {
-    final result = await _db.query(
+    final result = await _db!.query(
       _stateTable,
       columns: ['value'],
       where: 'key = ?',
@@ -1326,11 +1247,14 @@ class MockService {
   }
 
   void _saveAll() {
+    if (_db == null) return;
     unawaited(_saveAllAsync());
   }
 
   Future<void> _saveAllAsync() {
-    return _db.transaction((txn) async {
+    final db = _db;
+    if (db == null) return Future.value();
+    return db.transaction((txn) async {
       await _writeList(txn, 'users', _users.map(_userToJson).toList());
       await _writeList(
         txn,
