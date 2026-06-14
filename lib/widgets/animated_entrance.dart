@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 class AnimatedEntrance extends StatelessWidget {
@@ -14,7 +15,10 @@ class AnimatedEntrance extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final animationsDisabled = MediaQuery.disableAnimationsOf(context);
+    // Opacity + transform entrance animations create many compositor layers on
+    // Flutter Web. Keep them for native platforms, where they are inexpensive.
+    final animationsDisabled =
+        kIsWeb || MediaQuery.disableAnimationsOf(context);
     if (animationsDisabled) return child;
 
     final cappedDelay = delay.inMilliseconds.clamp(0, 180);
@@ -30,13 +34,11 @@ class AnimatedEntrance extends StatelessWidget {
             : ((value * (baseDuration + cappedDelay) - cappedDelay) /
                       baseDuration)
                   .clamp(0.0, 1.0);
-        return RepaintBoundary(
-          child: Opacity(
-            opacity: delayedValue,
-            child: Transform.translate(
-              offset: offset * (1 - delayedValue),
-              child: child,
-            ),
+        return Opacity(
+          opacity: delayedValue,
+          child: Transform.translate(
+            offset: offset * (1 - delayedValue),
+            child: child,
           ),
         );
       },

@@ -241,18 +241,84 @@ class ProdiView extends StatelessWidget {
   }
 }
 
-class GlobalDataView extends StatelessWidget {
+class GlobalDataView extends StatefulWidget {
   const GlobalDataView({super.key});
 
+  @override
+  State<GlobalDataView> createState() => _GlobalDataViewState();
+}
+
+class _GlobalDataViewState extends State<GlobalDataView> {
   @override
   Widget build(BuildContext context) {
     // Ringkasan data global untuk admin universitas.
     // Semua angka diambil dari MockService agar selalu mengikuti data terbaru.
     final service = context.watch<MockService>();
+    final fase = service.faseKrsTahunAktif;
+    final now = DateTime.now();
     return AppScaffold(
       title: 'Data Global',
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.event_available_outlined,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Fase KRS Universitas',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w900),
+                        ),
+                      ),
+                      Chip(
+                        label: Text(fase?.statusPada(now) ?? 'Belum Dibuka'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    fase == null
+                        ? 'Belum ada jadwal pengisian KRS untuk ${service.tahunAjaranAktif.label}.'
+                        : 'Berlaku untuk seluruh universitas pada ${service.tahunAjaranAktif.label}.\n'
+                              'Mulai: ${_formatDateTime(fase.mulai)}\n'
+                              'Batas akhir: ${_formatDateTime(fase.berakhir)}',
+                  ),
+                  const SizedBox(height: 14),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      FilledButton.icon(
+                        onPressed: () => _showFaseKrsDialog(context, service),
+                        icon: const Icon(Icons.play_circle_outline),
+                        label: Text(
+                          fase == null ? 'Mulai Fase KRS' : 'Atur Ulang Fase',
+                        ),
+                      ),
+                      if (fase?.aktif == true)
+                        OutlinedButton.icon(
+                          onPressed: () => _akhiriFaseKrs(context, service),
+                          icon: const Icon(Icons.stop_circle_outlined),
+                          label: const Text('Akhiri Fase KRS'),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
           _StatRow(label: 'Fakultas', value: '${service.fakultas.length}'),
           _StatRow(label: 'Prodi', value: '${service.prodi.length}'),
           _StatRow(label: 'Mahasiswa', value: '${service.mahasiswa.length}'),
@@ -266,6 +332,119 @@ class GlobalDataView extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _showFaseKrsDialog(
+    BuildContext context,
+    MockService service,
+  ) async {
+    final tahunAktif = service.tahunAjaranAktif;
+    final faseSebelumnya = service.faseKrsTahunAktif;
+    var mulai = faseSebelumnya?.mulai ?? DateTime.now();
+    if (mulai.isBefore(tahunAktif.tanggalMulai)) {
+      mulai = tahunAktif.tanggalMulai;
+    } else if (mulai.isAfter(tahunAktif.tanggalSelesai)) {
+      mulai = tahunAktif.tanggalSelesai;
+    }
+    var berakhir =
+        faseSebelumnya?.berakhir ?? mulai.add(const Duration(days: 14));
+    if (berakhir.isAfter(tahunAktif.tanggalSelesai)) {
+      berakhir = tahunAktif.tanggalSelesai;
+    } else if (berakhir.isBefore(mulai)) {
+      berakhir = mulai;
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Mulai Fase KRS Universitas'),
+          content: SizedBox(
+            width: 480,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  'Jadwal ini berlaku untuk seluruh mahasiswa pada ${service.tahunAjaranAktif.label}.',
+                ),
+                const SizedBox(height: 16),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.calendar_today_outlined),
+                  title: const Text('Tanggal mulai'),
+                  subtitle: Text(_formatDateOnly(mulai)),
+                  trailing: const Icon(Icons.edit_calendar_outlined),
+                  onTap: () async {
+                    final selected = await showDatePicker(
+                      context: context,
+                      initialDate: mulai,
+                      firstDate: tahunAktif.tanggalMulai,
+                      lastDate: tahunAktif.tanggalSelesai,
+                    );
+                    if (selected != null) {
+                      setDialogState(() => mulai = selected);
+                    }
+                  },
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.event_busy_outlined),
+                  title: const Text('Batas akhir'),
+                  subtitle: Text('${_formatDateOnly(berakhir)} pukul 23:59'),
+                  trailing: const Icon(Icons.edit_calendar_outlined),
+                  onTap: () async {
+                    final selected = await showDatePicker(
+                      context: context,
+                      initialDate: berakhir.isBefore(mulai) ? mulai : berakhir,
+                      firstDate: mulai,
+                      lastDate: tahunAktif.tanggalSelesai,
+                    );
+                    if (selected != null) {
+                      setDialogState(() => berakhir = selected);
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Batal'),
+            ),
+            FilledButton(
+              onPressed: () {
+                try {
+                  final message = service.mulaiFaseKrs(
+                    mulai: mulai,
+                    berakhir: berakhir,
+                  );
+                  Navigator.pop(dialogContext);
+                  if (mounted) {
+                    setState(() {});
+                    showAppMessage(this.context, message);
+                  }
+                } on StateError catch (error) {
+                  showAppMessage(context, error.message);
+                }
+              },
+              child: const Text('Mulai Fase'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _akhiriFaseKrs(BuildContext context, MockService service) {
+    try {
+      final message = service.akhiriFaseKrs();
+      setState(() {});
+      showAppMessage(context, message);
+    } on StateError catch (error) {
+      showAppMessage(context, error.message);
+    }
   }
 }
 
@@ -468,7 +647,8 @@ Future<void> _ubahStatusMahasiswa(
                           if (file.size > 5 * 1024 * 1024) {
                             selectedFile = null;
                             fileError = 'Ukuran file melebihi batas 5 MB';
-                          } else if (file.bytes == null || file.bytes!.isEmpty) {
+                          } else if (file.bytes == null ||
+                              file.bytes!.isEmpty) {
                             selectedFile = null;
                             fileError = 'File tidak dapat dibaca';
                           } else {
@@ -594,6 +774,10 @@ String _formatDateTime(DateTime value) {
   return '${twoDigits(value.day)}/${twoDigits(value.month)}/${value.year} '
       '${twoDigits(value.hour)}:${twoDigits(value.minute)}';
 }
+
+String _formatDateOnly(DateTime value) =>
+    '${value.day.toString().padLeft(2, '0')}/'
+    '${value.month.toString().padLeft(2, '0')}/${value.year}';
 
 class DosenManagementView extends StatelessWidget {
   const DosenManagementView({required this.prodiId, super.key});
@@ -1493,16 +1677,17 @@ Future<Set<String>?> _showDosenPicker(
       return StatefulBuilder(
         builder: (context, setState) {
           final query = searchController.text.trim().toLowerCase();
-          final filtered = dosen.where((item) {
-            return query.isEmpty ||
-                item.nama.toLowerCase().contains(query) ||
-                item.nidn.toLowerCase().contains(query);
-          }).toList()..sort((a, b) {
-            final aSelected = pendingIds.contains(a.nidn);
-            final bSelected = pendingIds.contains(b.nidn);
-            if (aSelected != bSelected) return aSelected ? -1 : 1;
-            return a.nama.compareTo(b.nama);
-          });
+          final filtered =
+              dosen.where((item) {
+                return query.isEmpty ||
+                    item.nama.toLowerCase().contains(query) ||
+                    item.nidn.toLowerCase().contains(query);
+              }).toList()..sort((a, b) {
+                final aSelected = pendingIds.contains(a.nidn);
+                final bSelected = pendingIds.contains(b.nidn);
+                if (aSelected != bSelected) return aSelected ? -1 : 1;
+                return a.nama.compareTo(b.nama);
+              });
 
           return AlertDialog(
             title: const Text('Pilih Dosen Pengajar'),
@@ -1545,9 +1730,9 @@ Future<Set<String>?> _showDosenPicker(
                             itemBuilder: (context, index) {
                               final item = filtered[index];
                               final selected = pendingIds.contains(item.nidn);
-                              final selectedIndex = pendingIds
-                                  .toList()
-                                  .indexOf(item.nidn);
+                              final selectedIndex = pendingIds.toList().indexOf(
+                                item.nidn,
+                              );
                               return CheckboxListTile(
                                 value: selected,
                                 title: Text(item.nama),

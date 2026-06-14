@@ -1416,11 +1416,16 @@ class _MahasiswaKrsViewState extends State<MahasiswaKrsView> {
       ...allKrs.map((item) => item.semester),
     }.toList()..sort();
     final selectedSemester = _selectedSemester ?? mahasiswa.semester;
+    final isCurrentSemester = selectedSemester == mahasiswa.semester;
     final selectedKrs = allKrs
-        .where((item) => item.semester == selectedSemester)
+        .where(
+          (item) =>
+              item.semester == selectedSemester &&
+              (!isCurrentSemester ||
+                  item.tahunAjaranId == service.tahunAjaranAktif.id),
+        )
         .toList();
     final selectedAllSemester = allKrs.map((item) => item.kelasId).toSet();
-    final isCurrentSemester = selectedSemester == mahasiswa.semester;
     final selectedHasKrs = selectedKrs.isNotEmpty;
     final selectedApproved =
         selectedHasKrs && selectedKrs.every((item) => item.isValidated);
@@ -1432,8 +1437,11 @@ class _MahasiswaKrsViewState extends State<MahasiswaKrsView> {
     final selectedLocked =
         isCurrentSemester &&
         selectedKrs.any((item) => item.isSubmitted || item.isValidated);
+    final faseKrs = service.faseKrsTahunAktif;
+    final faseKrsBerlangsung = service.isFaseKrsBerlangsung;
     final canSubmit =
         isCurrentSemester &&
+        faseKrsBerlangsung &&
         selectedHasKrs &&
         !selectedSubmitted &&
         !selectedApproved;
@@ -1455,7 +1463,8 @@ class _MahasiswaKrsViewState extends State<MahasiswaKrsView> {
       final mataKuliah = service.mataKuliah.firstWhere(
         (item) => item.kode == kelas.mataKuliahId,
       );
-      return mataKuliah.prodiId == mahasiswa.prodiId;
+      return mataKuliah.prodiId == mahasiswa.prodiId &&
+          kelas.tahunAjaranId == service.tahunAjaranAktif.id;
     }).toList();
     final visibleKelas = isCurrentSemester
         ? availableKelas
@@ -1487,6 +1496,32 @@ class _MahasiswaKrsViewState extends State<MahasiswaKrsView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Card(
+            child: ListTile(
+              leading: Icon(
+                faseKrsBerlangsung
+                    ? Icons.event_available_outlined
+                    : Icons.event_busy_outlined,
+                color: faseKrsBerlangsung
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.error,
+              ),
+              title: Text(
+                faseKrsBerlangsung
+                    ? 'Fase KRS Sedang Berlangsung'
+                    : 'Pengisian KRS Tidak Aktif',
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
+              subtitle: Text(
+                faseKrs == null
+                    ? 'Admin Universitas belum membuka fase KRS.'
+                    : 'Status: ${faseKrs.statusPada(DateTime.now())}\n'
+                          'Periode: ${_formatKrsDate(faseKrs.mulai)} sampai ${_formatKrsDate(faseKrs.berakhir)}',
+              ),
+              isThreeLine: faseKrs != null,
+            ),
+          ),
+          const SizedBox(height: 14),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -1616,6 +1651,7 @@ class _MahasiswaKrsViewState extends State<MahasiswaKrsView> {
                         : krsMatches.first.statusLabel;
                     final canRemove =
                         isCurrentSemester &&
+                        faseKrsBerlangsung &&
                         krsMatches.isNotEmpty &&
                         !krsMatches.first.isSubmitted &&
                         !krsMatches.first.isValidated;
@@ -1653,14 +1689,19 @@ class _MahasiswaKrsViewState extends State<MahasiswaKrsView> {
                                     ),
                                   )
                           : FilledButton(
-                              onPressed: isFull || selectedLocked
+                              onPressed:
+                                  isFull ||
+                                      selectedLocked ||
+                                      !faseKrsBerlangsung
                                   ? null
                                   : () {
                                       krsVm.take(widget.mahasiswaId, kelas.id);
                                       showAppMessage(context, krsVm.message);
                                     },
                               child: Text(
-                                selectedLocked
+                                !faseKrsBerlangsung
+                                    ? 'KRS Ditutup'
+                                    : selectedLocked
                                     ? 'Terkunci'
                                     : isFull
                                     ? 'Penuh'
@@ -1676,6 +1717,12 @@ class _MahasiswaKrsViewState extends State<MahasiswaKrsView> {
     );
   }
 }
+
+String _formatKrsDate(DateTime value) =>
+    '${value.day.toString().padLeft(2, '0')}/'
+    '${value.month.toString().padLeft(2, '0')}/${value.year} '
+    '${value.hour.toString().padLeft(2, '0')}:'
+    '${value.minute.toString().padLeft(2, '0')}';
 
 class MahasiswaJadwalView extends StatefulWidget {
   const MahasiswaJadwalView({required this.mahasiswaId, super.key});

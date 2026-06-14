@@ -240,7 +240,7 @@ class _DesktopTopBar extends StatelessWidget {
   }
 }
 
-class _LazyRolePageStack extends StatefulWidget {
+class _LazyRolePageStack extends StatelessWidget {
   const _LazyRolePageStack({
     required this.index,
     required this.pageBuilders,
@@ -251,46 +251,11 @@ class _LazyRolePageStack extends StatefulWidget {
   final List<_RolePageBuilder> pageBuilders;
 
   @override
-  State<_LazyRolePageStack> createState() => _LazyRolePageStackState();
-}
-
-class _LazyRolePageStackState extends State<_LazyRolePageStack> {
-  late List<Widget?> _pageCache;
-
-  @override
-  void initState() {
-    super.initState();
-    _pageCache = List<Widget?>.filled(widget.pageBuilders.length, null);
-  }
-
-  @override
-  void didUpdateWidget(covariant _LazyRolePageStack oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.pageBuilders.length != widget.pageBuilders.length) {
-      _pageCache = List<Widget?>.filled(widget.pageBuilders.length, null);
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    _pageCache[widget.index] ??= RepaintBoundary(
-      child: widget.pageBuilders[widget.index](),
-    );
-
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        for (var i = 0; i < _pageCache.length; i++)
-          if (_pageCache[i] != null)
-            TickerMode(
-              enabled: i == widget.index,
-              child: Offstage(
-                offstage: i != widget.index,
-                child: _pageCache[i],
-              ),
-            ),
-      ],
-    );
+    // Hidden pages contain Provider listeners and expensive data projections.
+    // Keeping them mounted makes every data update rebuild tabs the user cannot
+    // see. PageStorageKey in AppScaffold still preserves scroll positions.
+    return KeyedSubtree(key: ValueKey(index), child: pageBuilders[index]());
   }
 }
 
@@ -786,6 +751,25 @@ class _RoleNavConfig {
             ],
           );
         }
+        if (currentUser.tingkatPimpinan == TingkatPimpinan.rektor) {
+          return _RoleNavConfig(
+            destinations: _rektorDestinations,
+            pageBuilders: (user, logout, selectTab) => [
+              () => RektorDashboardView(
+                user: user,
+                onOpenData: () => selectTab(1),
+                onOpenKrs: () => selectTab(2),
+                onOpenPresensi: () => selectTab(3),
+                onOpenLaporan: () => selectTab(4),
+              ),
+              () => PimpinanDataView(user: user),
+              () => PimpinanKrsView(user: user),
+              () => PimpinanPresensiView(user: user),
+              () => PimpinanLaporanView(user: user),
+              () => ProfileView(user: user, onLogout: logout),
+            ],
+          );
+        }
         return _RoleNavConfig(
           destinations: _pimpinanDestinations,
           pageBuilders: (user, logout, selectTab) => [
@@ -931,5 +915,29 @@ const _dekanDestinations = [
     label: 'Presensi',
   ),
   NavigationDestination(icon: Icon(Icons.summarize_outlined), label: 'Laporan'),
+  NavigationDestination(icon: Icon(Icons.person_outline), label: 'Profil'),
+];
+
+const _rektorDestinations = [
+  NavigationDestination(
+    icon: Icon(Icons.dashboard_outlined),
+    label: 'Dashboard Rektor',
+  ),
+  NavigationDestination(
+    icon: Icon(Icons.account_balance_outlined),
+    label: 'Data Universitas',
+  ),
+  NavigationDestination(
+    icon: Icon(Icons.fact_check_outlined),
+    label: 'KRS Universitas',
+  ),
+  NavigationDestination(
+    icon: Icon(Icons.monitor_heart_outlined),
+    label: 'Presensi',
+  ),
+  NavigationDestination(
+    icon: Icon(Icons.summarize_outlined),
+    label: 'Laporan Akademik',
+  ),
   NavigationDestination(icon: Icon(Icons.person_outline), label: 'Profil'),
 ];

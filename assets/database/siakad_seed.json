@@ -1,0 +1,388 @@
+{
+  "users": [
+    {
+      "id": "u-001",
+      "username": "univ",
+      "password": "password",
+      "role": "adminUniversitas",
+      "name": "Admin Universitas",
+      "scopeId": "global",
+      "tingkatPimpinan": null
+    },
+    {
+      "id": "u-002",
+      "username": "fakultas",
+      "password": "password",
+      "role": "adminFakultas",
+      "name": "Admin Fakultas Teknik",
+      "scopeId": "f-01",
+      "tingkatPimpinan": null
+    },
+    {
+      "id": "u-003",
+      "username": "operator",
+      "password": "password",
+      "role": "adminProdi",
+      "name": "Operator Prodi Informatika",
+      "scopeId": "p-01",
+      "tingkatPimpinan": null
+    },
+    {
+      "id": "u-004",
+      "username": "rektor",
+      "password": "password",
+      "role": "pimpinan",
+      "name": "Rektor Universitas",
+      "scopeId": "global",
+      "tingkatPimpinan": "rektor"
+    },
+    {
+      "id": "u-007",
+      "username": "rektor@siakad.com",
+      "password": "123456",
+      "role": "pimpinan",
+      "name": "Rektor Universitas",
+      "scopeId": "global",
+      "tingkatPimpinan": "rektor"
+    },
+    {
+      "id": "u-005",
+      "username": "dekan",
+      "password": "password",
+      "role": "pimpinan",
+      "name": "Dekan Fakultas Teknik",
+      "scopeId": "f-01",
+      "tingkatPimpinan": "dekan"
+    },
+    {
+      "id": "u-006",
+      "username": "korpro",
+      "password": "password",
+      "role": "pimpinan",
+      "name": "Korpro Informatika",
+      "scopeId": "p-01",
+      "tingkatPimpinan": "korpro"
+    }
+  ],
+  "fakultas": [
+    {
+      "id": "f-01",
+      "nama": "Fakultas Teknik"
+    },
+    {
+      "id": "f-02",
+      "nama": "Fakultas Ekonomi dan Bisnis"
+    }
+  ],
+  "prodi": [
+    {
+      "id": "p-01",
+      "nama": "Informatika",
+      "fakultasId": "f-01"
+    },
+    {
+      "id": "p-02",
+      "nama": "Sistem Informasi",
+      "fakultasId": "f-01"
+    },
+    {
+      "id": "p-03",
+      "nama": "Manajemen",
+      "fakultasId": "f-02"
+    }
+  ],
+  "tahunAjaran": [
+    {
+      "id": "ta-2024-ganjil",
+      "nama": "2024/2025",
+      "semester": "ganjil",
+      "tanggalMulai": "2024-08-01T00:00:00.000",
+      "tanggalSelesai": "2025-01-31T00:00:00.000",
+      "aktif": 0
+    },
+    {
+      "id": "ta-2024-genap",
+      "nama": "2024/2025",
+      "semester": "genap",
+      "tanggalMulai": "2025-02-01T00:00:00.000",
+      "tanggalSelesai": "2025-07-31T00:00:00.000",
+      "aktif": 0
+    },
+    {
+      "id": "ta-2025-ganjil",
+      "nama": "2025/2026",
+      "semester": "ganjil",
+      "tanggalMulai": "2025-08-01T00:00:00.000",
+      "tanggalSelesai": "2026-01-31T00:00:00.000",
+      "aktif": 0
+    },
+    {
+      "id": "ta-2025-genap",
+      "nama": "2025/2026",
+      "semester": "genap",
+      "tanggalMulai": "2026-02-01T00:00:00.000",
+      "tanggalSelesai": "2026-07-31T00:00:00.000",
+      "aktif": 1
+    }
+  ],
+  "mahasiswa": [
+    {
+      "nim": "2406080046",
+      "nama": "Jeremy Nunuhitu",
+      "jenisKelamin": "Laki-laki",
+      "prodiId": "p-01",
+      "password": "password",
+      "pembimbingAkademikId": "d-01",
+      "semester": 5,
+      "email": "jeremy.nunuhitu@student.ac.id",
+      "noHp": "081234567890",
+      "alamat": "Jl. Pendidikan No. 46",
+      "status": "aktif"
+    },
+    {
+      "nim": "221110124",
+      "nama": "Aulia Putri",
+      "jenisKelamin": "Perempuan",
+      "prodiId": "p-01",
+      "password": "password",
+      "pembimbingAkademikId": "d-01",
+      "semester": 5,
+      "email": "aulia.putri@student.ac.id",
+      "noHp": "081298765432",
+      "alamat": "Jl. Merdeka No. 12",
+      "status": "aktif"
+    },
+    {
+      "nim": "221110125",
+      "nama": "Rafi Mahendra",
+      "jenisKelamin": "Laki-laki",
+      "prodiId": "p-02",
+      "password": "password",
+      "pembimbingAkademikId": "d-03",
+      "semester": 3,
+      "email": "rafi.mahendra@student.ac.id",
+      "noHp": "081377778888",
+      "alamat": "Jl. Kampus No. 8",
+      "status": "aktif"
+    }
+  ],
+  "riwayatStatusMahasiswa": [],
+  "dosen": [
+    {
+      "nidn": "d-01",
+      "nama": "Dr. Andi Pratama",
+      "prodiId": "p-01",
+      "password": "password",
+      "email": "andi.pratama@kampus.ac.id",
+      "noHp": "081245670001",
+      "alamat": "Jl. Dosen Informatika No. 1",
+      "keahlian": "Mobile Computing"
+    },
+    {
+      "nidn": "d-02",
+      "nama": "Nadia Rahma, M.Kom",
+      "prodiId": "p-01",
+      "password": "password",
+      "email": "nadia.rahma@kampus.ac.id",
+      "noHp": "081245670002",
+      "alamat": "Jl. Basis Data No. 2",
+      "keahlian": "Database Systems"
+    },
+    {
+      "nidn": "d-03",
+      "nama": "Fitri Lestari, M.Cs",
+      "prodiId": "p-02",
+      "password": "password",
+      "email": "fitri.lestari@kampus.ac.id",
+      "noHp": "081245670003",
+      "alamat": "Jl. Sistem Informasi No. 3",
+      "keahlian": "Software Engineering"
+    }
+  ],
+  "mataKuliah": [
+    {
+      "kode": "IF401",
+      "nama": "Pemrograman Mobile",
+      "sks": 3,
+      "prodiId": "p-01"
+    },
+    {
+      "kode": "IF402",
+      "nama": "Basis Data Lanjut",
+      "sks": 3,
+      "prodiId": "p-01"
+    },
+    {
+      "kode": "IF403",
+      "nama": "Rekayasa Perangkat Lunak",
+      "sks": 3,
+      "prodiId": "p-01"
+    }
+  ],
+  "ruangan": [
+    {
+      "kodeRuangan": "LAB-1",
+      "namaRuangan": "Lab Komputer 1",
+      "kapasitasRuangan": 35,
+      "lokasi": "Gedung Laboratorium"
+    },
+    {
+      "kodeRuangan": "R-203",
+      "namaRuangan": "Ruang Kuliah 203",
+      "kapasitasRuangan": 40,
+      "lokasi": "Gedung A"
+    },
+    {
+      "kodeRuangan": "R-204",
+      "namaRuangan": "Ruang Kuliah 204",
+      "kapasitasRuangan": 30,
+      "lokasi": "Gedung A"
+    }
+  ],
+  "kelas": [
+    {
+      "id": "k-01",
+      "mataKuliahId": "IF401",
+      "dosenId": "d-01",
+      "kapasitas": 30,
+      "hari": "Senin",
+      "jam": "08.00 - 10.30",
+      "ruangan": "LAB-1",
+      "tahunAjaranId": "ta-2025-genap"
+    },
+    {
+      "id": "k-02",
+      "mataKuliahId": "IF402",
+      "dosenId": "d-02",
+      "kapasitas": 1,
+      "hari": "Selasa",
+      "jam": "10.40 - 13.10",
+      "ruangan": "R-203",
+      "tahunAjaranId": "ta-2025-genap"
+    }
+  ],
+  "dosenPengajar": [
+    {
+      "id": "dp-01",
+      "idKelas": "k-01",
+      "nidnDosen": "d-01",
+      "peranMengajar": "Dosen Utama"
+    },
+    {
+      "id": "dp-02",
+      "idKelas": "k-02",
+      "nidnDosen": "d-02",
+      "peranMengajar": "Dosen Utama"
+    }
+  ],
+  "krs": [
+    {
+      "id": "krs-01",
+      "mahasiswaId": "2406080046",
+      "kelasId": "k-01",
+      "semester": 5,
+      "isSubmitted": 1,
+      "isValidated": 1,
+      "isRejected": 0,
+      "catatanDosenPa": "",
+      "tahunAjaranId": "ta-2025-genap"
+    },
+    {
+      "id": "krs-02",
+      "mahasiswaId": "2406080046",
+      "kelasId": "k-02",
+      "semester": 4,
+      "isSubmitted": 1,
+      "isValidated": 1,
+      "isRejected": 0,
+      "catatanDosenPa": "",
+      "tahunAjaranId": "ta-2025-genap"
+    }
+  ],
+  "faseKrs": [],
+  "nilai": [
+    {
+      "id": "n-01",
+      "mahasiswaId": "2406080046",
+      "kelasId": "k-01",
+      "nilaiAngka": 88,
+      "nilaiHuruf": "A",
+      "semester": 5,
+      "nilaiTugas": 90,
+      "nilaiUts": 84,
+      "nilaiUas": 88,
+      "nilaiSoftskill": 92,
+      "bobotTugas": 25,
+      "bobotUts": 25,
+      "bobotUas": 35,
+      "bobotSoftskill": 15,
+      "tahunAjaranId": "ta-2025-genap"
+    },
+    {
+      "id": "n-02",
+      "mahasiswaId": "2406080046",
+      "kelasId": "k-02",
+      "nilaiAngka": 82,
+      "nilaiHuruf": "B+",
+      "semester": 4,
+      "nilaiTugas": 86,
+      "nilaiUts": 78,
+      "nilaiUas": 80,
+      "nilaiSoftskill": 88,
+      "bobotTugas": 25,
+      "bobotUts": 25,
+      "bobotUas": 35,
+      "bobotSoftskill": 15,
+      "tahunAjaranId": "ta-2025-genap"
+    },
+    {
+      "id": "n-history-01",
+      "mahasiswaId": "2406080046",
+      "kelasId": "k-01",
+      "nilaiAngka": 78,
+      "nilaiHuruf": "B+",
+      "semester": 1,
+      "tahunAjaranId": "ta-2024-ganjil"
+    },
+    {
+      "id": "n-history-02",
+      "mahasiswaId": "2406080046",
+      "kelasId": "k-01",
+      "nilaiAngka": 82,
+      "nilaiHuruf": "B+",
+      "semester": 2,
+      "tahunAjaranId": "ta-2024-genap"
+    },
+    {
+      "id": "n-history-03",
+      "mahasiswaId": "2406080046",
+      "kelasId": "k-01",
+      "nilaiAngka": 86,
+      "nilaiHuruf": "A",
+      "semester": 3,
+      "tahunAjaranId": "ta-2025-ganjil"
+    }
+  ],
+  "tugas": [
+    {
+      "id": "t-01",
+      "kelasId": "k-01",
+      "judul": "Tugas 1: UI/UX Design",
+      "deskripsi": "Membuat rancangan UI/UX menggunakan Figma.",
+      "deadline": "2026-06-17T23:59:59.000"
+    },
+    {
+      "id": "t-02",
+      "kelasId": "k-01",
+      "judul": "Tugas 2: Flutter Layout",
+      "deskripsi": "Implementasi rancangan UI ke Flutter.",
+      "deadline": "2026-06-21T23:59:59.000"
+    }
+  ],
+  "skripsi": [],
+  "magang": [],
+  "kkn": [],
+  "pertemuan": [],
+  "presensi": [],
+  "presensiDosen": []
+}

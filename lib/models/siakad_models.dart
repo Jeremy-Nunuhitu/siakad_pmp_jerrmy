@@ -105,6 +105,44 @@ class TahunAjaran {
   String get label => '$nama ${semester.label}';
 }
 
+class FaseKrs {
+  const FaseKrs({
+    required this.tahunAjaranId,
+    required this.mulai,
+    required this.berakhir,
+    this.aktif = true,
+  });
+
+  final String tahunAjaranId;
+  final DateTime mulai;
+  final DateTime berakhir;
+  final bool aktif;
+
+  bool berlangsungPada(DateTime waktu) =>
+      aktif && !waktu.isBefore(mulai) && !waktu.isAfter(berakhir);
+
+  String statusPada(DateTime waktu) {
+    if (!aktif) return 'Ditutup';
+    if (waktu.isBefore(mulai)) return 'Terjadwal';
+    if (waktu.isAfter(berakhir)) return 'Berakhir';
+    return 'Berlangsung';
+  }
+
+  FaseKrs copyWith({
+    String? tahunAjaranId,
+    DateTime? mulai,
+    DateTime? berakhir,
+    bool? aktif,
+  }) {
+    return FaseKrs(
+      tahunAjaranId: tahunAjaranId ?? this.tahunAjaranId,
+      mulai: mulai ?? this.mulai,
+      berakhir: berakhir ?? this.berakhir,
+      aktif: aktif ?? this.aktif,
+    );
+  }
+}
+
 enum StatusMahasiswa { aktif, cuti, nonaktif, lulus, dropOut }
 
 extension StatusMahasiswaLabel on StatusMahasiswa {

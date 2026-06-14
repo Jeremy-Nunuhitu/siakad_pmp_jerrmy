@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 
+import 'package:flutter/services.dart';
 import 'package:sqflite_common/sqlite_api.dart';
 
 import '../models/siakad_models.dart';
@@ -11,6 +12,7 @@ class MockService {
   MockService._(this._db);
 
   static const _databaseName = 'siakad_jeremy.sqlite';
+  static const _seedAsset = 'assets/database/siakad_seed.json';
   static const _stateTable = 'app_state';
 
   final Database? _db;
@@ -19,370 +21,38 @@ class MockService {
     final db = await openMockDatabase(_databaseName);
     final service = MockService._(db);
     if (db == null) {
+      await service._loadSeedData();
       service._seedPertemuanDefaults();
       return service;
     }
     await service._createSchema();
     if (await service._hasSavedState()) {
       await service._loadState();
-      service._ensureFeatureDefaults();
+      await service._ensureFeatureDefaults();
     } else {
+      await service._loadSeedData();
       service._seedPertemuanDefaults();
       await service._saveAllAsync();
     }
     return service;
   }
 
-  // Data default ini dipakai sebagai seed pertama. Perubahan disimpan ke
-  // SQLite pada platform native dan tetap in-memory pada Web.
-  final List<User> _users = [
-    const User(
-      id: 'u-001',
-      username: 'univ',
-      password: 'password',
-      role: Role.adminUniversitas,
-      name: 'Admin Universitas',
-      scopeId: 'global',
-    ),
-    const User(
-      id: 'u-002',
-      username: 'fakultas',
-      password: 'password',
-      role: Role.adminFakultas,
-      name: 'Admin Fakultas Teknik',
-      scopeId: 'f-01',
-    ),
-    const User(
-      id: 'u-003',
-      username: 'operator',
-      password: 'password',
-      role: Role.adminProdi,
-      name: 'Operator Prodi Informatika',
-      scopeId: 'p-01',
-    ),
-    const User(
-      id: 'u-004',
-      username: 'rektor',
-      password: 'password',
-      role: Role.pimpinan,
-      name: 'Rektor Universitas',
-      scopeId: 'global',
-      tingkatPimpinan: TingkatPimpinan.rektor,
-    ),
-    const User(
-      id: 'u-005',
-      username: 'dekan',
-      password: 'password',
-      role: Role.pimpinan,
-      name: 'Dekan Fakultas Teknik',
-      scopeId: 'f-01',
-      tingkatPimpinan: TingkatPimpinan.dekan,
-    ),
-    const User(
-      id: 'u-006',
-      username: 'korpro',
-      password: 'password',
-      role: Role.pimpinan,
-      name: 'Korpro Informatika',
-      scopeId: 'p-01',
-      tingkatPimpinan: TingkatPimpinan.korpro,
-    ),
-  ];
-
-  final List<Fakultas> _fakultas = [
-    const Fakultas(id: 'f-01', nama: 'Fakultas Teknik'),
-    const Fakultas(id: 'f-02', nama: 'Fakultas Ekonomi dan Bisnis'),
-  ];
-
-  final List<Prodi> _prodi = [
-    const Prodi(id: 'p-01', nama: 'Informatika', fakultasId: 'f-01'),
-    const Prodi(id: 'p-02', nama: 'Sistem Informasi', fakultasId: 'f-01'),
-    const Prodi(id: 'p-03', nama: 'Manajemen', fakultasId: 'f-02'),
-  ];
-
-  final List<TahunAjaran> _tahunAjaran = [
-    TahunAjaran(
-      id: 'ta-2024-ganjil',
-      nama: '2024/2025',
-      semester: SemesterAkademik.ganjil,
-      tanggalMulai: DateTime(2024, 8, 1),
-      tanggalSelesai: DateTime(2025, 1, 31),
-    ),
-    TahunAjaran(
-      id: 'ta-2024-genap',
-      nama: '2024/2025',
-      semester: SemesterAkademik.genap,
-      tanggalMulai: DateTime(2025, 2, 1),
-      tanggalSelesai: DateTime(2025, 7, 31),
-    ),
-    TahunAjaran(
-      id: 'ta-2025-ganjil',
-      nama: '2025/2026',
-      semester: SemesterAkademik.ganjil,
-      tanggalMulai: DateTime(2025, 8, 1),
-      tanggalSelesai: DateTime(2026, 1, 31),
-    ),
-    TahunAjaran(
-      id: 'ta-2025-genap',
-      nama: '2025/2026',
-      semester: SemesterAkademik.genap,
-      tanggalMulai: DateTime(2026, 2, 1),
-      tanggalSelesai: DateTime(2026, 7, 31),
-      aktif: true,
-    ),
-  ];
-
-  final List<Mahasiswa> _mahasiswa = [
-    const Mahasiswa(
-      nim: '2406080046',
-      nama: 'Jeremy Nunuhitu',
-      jenisKelamin: 'Laki-laki',
-      prodiId: 'p-01',
-      password: 'password',
-      pembimbingAkademikId: 'd-01',
-      semester: 5,
-      email: 'jeremy.nunuhitu@student.ac.id',
-      noHp: '081234567890',
-      alamat: 'Jl. Pendidikan No. 46',
-    ),
-    const Mahasiswa(
-      nim: '221110124',
-      nama: 'Aulia Putri',
-      jenisKelamin: 'Perempuan',
-      prodiId: 'p-01',
-      password: 'password',
-      pembimbingAkademikId: 'd-01',
-      semester: 5,
-      email: 'aulia.putri@student.ac.id',
-      noHp: '081298765432',
-      alamat: 'Jl. Merdeka No. 12',
-    ),
-    const Mahasiswa(
-      nim: '221110125',
-      nama: 'Rafi Mahendra',
-      jenisKelamin: 'Laki-laki',
-      prodiId: 'p-02',
-      password: 'password',
-      pembimbingAkademikId: 'd-03',
-      semester: 3,
-      email: 'rafi.mahendra@student.ac.id',
-      noHp: '081377778888',
-      alamat: 'Jl. Kampus No. 8',
-    ),
-  ];
-
+  // SQLite is the source of truth. The bundled seed is imported only when the
+  // database is empty; Web keeps the same data in memory because it has no DB.
+  final List<User> _users = [];
+  final List<Fakultas> _fakultas = [];
+  final List<Prodi> _prodi = [];
+  final List<TahunAjaran> _tahunAjaran = [];
+  final List<Mahasiswa> _mahasiswa = [];
   final List<RiwayatStatusMahasiswa> _riwayatStatusMahasiswa = [];
-
-  final List<Dosen> _dosen = [
-    const Dosen(
-      nidn: 'd-01',
-      nama: 'Dr. Andi Pratama',
-      prodiId: 'p-01',
-      password: 'password',
-      email: 'andi.pratama@kampus.ac.id',
-      noHp: '081245670001',
-      alamat: 'Jl. Dosen Informatika No. 1',
-      keahlian: 'Mobile Computing',
-    ),
-    const Dosen(
-      nidn: 'd-02',
-      nama: 'Nadia Rahma, M.Kom',
-      prodiId: 'p-01',
-      password: 'password',
-      email: 'nadia.rahma@kampus.ac.id',
-      noHp: '081245670002',
-      alamat: 'Jl. Basis Data No. 2',
-      keahlian: 'Database Systems',
-    ),
-    const Dosen(
-      nidn: 'd-03',
-      nama: 'Fitri Lestari, M.Cs',
-      prodiId: 'p-02',
-      password: 'password',
-      email: 'fitri.lestari@kampus.ac.id',
-      noHp: '081245670003',
-      alamat: 'Jl. Sistem Informasi No. 3',
-      keahlian: 'Software Engineering',
-    ),
-  ];
-
-  final List<MataKuliah> _mataKuliah = [
-    const MataKuliah(
-      kode: 'IF401',
-      nama: 'Pemrograman Mobile',
-      sks: 3,
-      prodiId: 'p-01',
-    ),
-    const MataKuliah(
-      kode: 'IF402',
-      nama: 'Basis Data Lanjut',
-      sks: 3,
-      prodiId: 'p-01',
-    ),
-    const MataKuliah(
-      kode: 'IF403',
-      nama: 'Rekayasa Perangkat Lunak',
-      sks: 3,
-      prodiId: 'p-01',
-    ),
-  ];
-
-  final List<Ruangan> _ruangan = [
-    const Ruangan(
-      kodeRuangan: 'LAB-1',
-      namaRuangan: 'Lab Komputer 1',
-      kapasitasRuangan: 35,
-      lokasi: 'Gedung Laboratorium',
-    ),
-    const Ruangan(
-      kodeRuangan: 'R-203',
-      namaRuangan: 'Ruang Kuliah 203',
-      kapasitasRuangan: 40,
-      lokasi: 'Gedung A',
-    ),
-    const Ruangan(
-      kodeRuangan: 'R-204',
-      namaRuangan: 'Ruang Kuliah 204',
-      kapasitasRuangan: 30,
-      lokasi: 'Gedung A',
-    ),
-  ];
-
-  final List<Kelas> _kelas = [
-    const Kelas(
-      id: 'k-01',
-      mataKuliahId: 'IF401',
-      dosenId: 'd-01',
-      kapasitas: 30,
-      hari: 'Senin',
-      jam: '08.00 - 10.30',
-      ruangan: 'LAB-1',
-    ),
-    const Kelas(
-      id: 'k-02',
-      mataKuliahId: 'IF402',
-      dosenId: 'd-02',
-      kapasitas: 1,
-      hari: 'Selasa',
-      jam: '10.40 - 13.10',
-      ruangan: 'R-203',
-    ),
-  ];
-
-  final List<DosenPengajar> _dosenPengajar = [
-    const DosenPengajar(
-      id: 'dp-01',
-      idKelas: 'k-01',
-      nidnDosen: 'd-01',
-      peranMengajar: 'Dosen Utama',
-    ),
-    const DosenPengajar(
-      id: 'dp-02',
-      idKelas: 'k-02',
-      nidnDosen: 'd-02',
-      peranMengajar: 'Dosen Utama',
-    ),
-  ];
-
-  final List<KRS> _krs = [
-    const KRS(
-      id: 'krs-01',
-      mahasiswaId: '2406080046',
-      kelasId: 'k-01',
-      semester: 5,
-      isSubmitted: true,
-      isValidated: true,
-    ),
-    const KRS(
-      id: 'krs-02',
-      mahasiswaId: '2406080046',
-      kelasId: 'k-02',
-      semester: 4,
-      isSubmitted: true,
-      isValidated: true,
-    ),
-  ];
-
-  final List<Nilai> _nilai = [
-    const Nilai(
-      id: 'n-01',
-      mahasiswaId: '2406080046',
-      kelasId: 'k-01',
-      nilaiAngka: 88,
-      nilaiHuruf: 'A',
-      semester: 5,
-      nilaiTugas: 90,
-      nilaiUts: 84,
-      nilaiUas: 88,
-      nilaiSoftskill: 92,
-      bobotTugas: 25,
-      bobotUts: 25,
-      bobotUas: 35,
-      bobotSoftskill: 15,
-      tahunAjaranId: 'ta-2025-genap',
-    ),
-    const Nilai(
-      id: 'n-02',
-      mahasiswaId: '2406080046',
-      kelasId: 'k-02',
-      nilaiAngka: 82,
-      nilaiHuruf: 'B+',
-      semester: 4,
-      nilaiTugas: 86,
-      nilaiUts: 78,
-      nilaiUas: 80,
-      nilaiSoftskill: 88,
-      bobotTugas: 25,
-      bobotUts: 25,
-      bobotUas: 35,
-      bobotSoftskill: 15,
-      tahunAjaranId: 'ta-2025-genap',
-    ),
-    const Nilai(
-      id: 'n-history-01',
-      mahasiswaId: '2406080046',
-      kelasId: 'k-01',
-      nilaiAngka: 78,
-      nilaiHuruf: 'B+',
-      semester: 1,
-      tahunAjaranId: 'ta-2024-ganjil',
-    ),
-    const Nilai(
-      id: 'n-history-02',
-      mahasiswaId: '2406080046',
-      kelasId: 'k-01',
-      nilaiAngka: 82,
-      nilaiHuruf: 'B+',
-      semester: 2,
-      tahunAjaranId: 'ta-2024-genap',
-    ),
-    const Nilai(
-      id: 'n-history-03',
-      mahasiswaId: '2406080046',
-      kelasId: 'k-01',
-      nilaiAngka: 86,
-      nilaiHuruf: 'A',
-      semester: 3,
-      tahunAjaranId: 'ta-2025-ganjil',
-    ),
-  ];
-
-  final List<Tugas> _tugas = [
-    Tugas(
-      id: 't-01',
-      kelasId: 'k-01',
-      judul: 'Tugas 1: UI/UX Design',
-      deskripsi: 'Membuat rancangan UI/UX menggunakan Figma.',
-      deadline: DateTime.now().add(const Duration(days: 3)),
-    ),
-    Tugas(
-      id: 't-02',
-      kelasId: 'k-01',
-      judul: 'Tugas 2: Flutter Layout',
-      deskripsi: 'Implementasi rancangan UI ke Flutter.',
-      deadline: DateTime.now().add(const Duration(days: 7)),
-    ),
-  ];
+  final List<Dosen> _dosen = [];
+  final List<MataKuliah> _mataKuliah = [];
+  final List<Ruangan> _ruangan = [];
+  final List<Kelas> _kelas = [];
+  final List<DosenPengajar> _dosenPengajar = [];
+  final List<KRS> _krs = [];
+  final List<Nilai> _nilai = [];
+  final List<Tugas> _tugas = [];
   final List<Skripsi> _skripsi = [];
   final List<Magang> _magang = [];
   final List<Kkn> _kkn = [];
@@ -390,6 +60,7 @@ class MockService {
   final List<Pertemuan> _pertemuan = [];
   final List<Presensi> _presensi = [];
   final List<PresensiDosen> _presensiDosen = [];
+  final List<FaseKrs> _faseKrs = [];
 
   // View read-only dibuat sekali agar build UI tidak terus membuat list baru.
   late final List<User> users = UnmodifiableListView(_users);
@@ -417,11 +88,77 @@ class MockService {
   late final List<PresensiDosen> presensiDosen = UnmodifiableListView(
     _presensiDosen,
   );
+  late final List<FaseKrs> faseKrs = UnmodifiableListView(_faseKrs);
 
   TahunAjaran get tahunAjaranAktif => _tahunAjaran.firstWhere(
     (item) => item.aktif,
     orElse: () => _tahunAjaran.last,
   );
+
+  FaseKrs? get faseKrsTahunAktif {
+    final tahunId = tahunAjaranAktif.id;
+    for (final fase in _faseKrs.reversed) {
+      if (fase.tahunAjaranId == tahunId) return fase;
+    }
+    return null;
+  }
+
+  bool get isFaseKrsBerlangsung =>
+      faseKrsTahunAktif?.berlangsungPada(DateTime.now()) ?? false;
+
+  String mulaiFaseKrs({required DateTime mulai, required DateTime berakhir}) {
+    final tahunAktif = tahunAjaranAktif;
+    final mulaiNormal = DateTime(mulai.year, mulai.month, mulai.day);
+    final berakhirNormal = DateTime(
+      berakhir.year,
+      berakhir.month,
+      berakhir.day,
+      23,
+      59,
+      59,
+      999,
+    );
+    if (berakhirNormal.isBefore(mulaiNormal)) {
+      throw StateError('Batas akhir KRS tidak boleh sebelum tanggal mulai');
+    }
+    final akhirTahunAktif = DateTime(
+      tahunAktif.tanggalSelesai.year,
+      tahunAktif.tanggalSelesai.month,
+      tahunAktif.tanggalSelesai.day,
+      23,
+      59,
+      59,
+      999,
+    );
+    if (mulaiNormal.isBefore(tahunAktif.tanggalMulai) ||
+        berakhirNormal.isAfter(akhirTahunAktif)) {
+      throw StateError('Fase KRS harus berada dalam tahun akademik aktif');
+    }
+
+    for (var i = 0; i < _faseKrs.length; i++) {
+      if (_faseKrs[i].aktif) {
+        _faseKrs[i] = _faseKrs[i].copyWith(aktif: false);
+      }
+    }
+    _faseKrs.add(
+      FaseKrs(
+        tahunAjaranId: tahunAktif.id,
+        mulai: mulaiNormal,
+        berakhir: berakhirNormal,
+      ),
+    );
+    return _saved('Fase KRS universitas berhasil dimulai');
+  }
+
+  String akhiriFaseKrs() {
+    final fase = faseKrsTahunAktif;
+    if (fase == null || !fase.aktif) {
+      throw StateError('Tidak ada fase KRS aktif untuk diakhiri');
+    }
+    final index = _faseKrs.indexOf(fase);
+    _faseKrs[index] = fase.copyWith(aktif: false);
+    return _saved('Fase KRS universitas berhasil diakhiri');
+  }
 
   void _seedPertemuanDefaults() {
     for (final k in _kelas) {
@@ -438,52 +175,20 @@ class MockService {
     }
   }
 
-  void _ensureFeatureDefaults() {
-    const pimpinanDefaults = [
-      User(
-        id: 'u-004',
-        username: 'rektor',
-        password: 'password',
-        role: Role.pimpinan,
-        name: 'Rektor Universitas',
-        scopeId: 'global',
-        tingkatPimpinan: TingkatPimpinan.rektor,
-      ),
-      User(
-        id: 'u-005',
-        username: 'dekan',
-        password: 'password',
-        role: Role.pimpinan,
-        name: 'Dekan Fakultas Teknik',
-        scopeId: 'f-01',
-        tingkatPimpinan: TingkatPimpinan.dekan,
-      ),
-      User(
-        id: 'u-006',
-        username: 'korpro',
-        password: 'password',
-        role: Role.pimpinan,
-        name: 'Korpro Informatika',
-        scopeId: 'p-01',
-        tingkatPimpinan: TingkatPimpinan.korpro,
-      ),
-    ];
+  Future<void> _ensureFeatureDefaults() async {
+    final seed = await _readSeedData();
+    final pimpinanDefaults = _seedList(
+      seed,
+      'users',
+      _userFromJson,
+    ).where((item) => item.role == Role.pimpinan);
     for (final user in pimpinanDefaults) {
       if (!_users.any((item) => item.username == user.username)) {
         _users.add(user);
       }
     }
     if (_tahunAjaran.isEmpty) {
-      _tahunAjaran.addAll([
-        TahunAjaran(
-          id: 'ta-2025-genap',
-          nama: '2025/2026',
-          semester: SemesterAkademik.genap,
-          tanggalMulai: DateTime(2026, 2, 1),
-          tanggalSelesai: DateTime(2026, 7, 31),
-          aktif: true,
-        ),
-      ]);
+      _tahunAjaran.addAll(_seedList(seed, 'tahunAjaran', _tahunAjaranFromJson));
     }
     for (final kelas in _kelas) {
       for (var nomor = 1; nomor <= 16; nomor++) {
@@ -501,7 +206,7 @@ class MockService {
         }
       }
     }
-    _saveAll();
+    await _saveAllAsync();
   }
 
   User? login(String username, String password) {
@@ -1130,6 +835,7 @@ class MockService {
     _ensureExists(_kelas.any((item) => item.id == kelasId), 'Kelas');
     final mahasiswa = _mahasiswa.firstWhere((item) => item.nim == mahasiswaId);
     final kelas = _kelas.firstWhere((item) => item.id == kelasId);
+    _ensureFaseKrsOpen(kelas.tahunAjaranId);
     final mataKuliah = _mataKuliah.firstWhere(
       (item) => item.kode == kelas.mataKuliahId,
     );
@@ -1172,10 +878,13 @@ class MockService {
   }
 
   String submitKrs(String mahasiswaId, int semester) {
+    _ensureFaseKrsOpen(tahunAjaranAktif.id);
     final indexList = <int>[];
     for (int i = 0; i < _krs.length; i++) {
       final item = _krs[i];
-      if (item.mahasiswaId == mahasiswaId && item.semester == semester) {
+      if (item.mahasiswaId == mahasiswaId &&
+          item.semester == semester &&
+          item.tahunAjaranId == tahunAjaranAktif.id) {
         indexList.add(i);
       }
     }
@@ -1261,11 +970,32 @@ class MockService {
       (item) => item.id == krsId && item.mahasiswaId == mahasiswaId,
     );
     if (index == -1) throw StateError('KRS tidak ditemukan');
+    _ensureFaseKrsOpen(_krs[index].tahunAjaranId);
     if (_krs[index].isSubmitted || _krs[index].isValidated) {
       throw StateError('KRS yang sudah diajukan/disetujui tidak bisa dihapus');
     }
     _krs.removeAt(index);
     return _saved('Kelas berhasil dihapus dari KRS');
+  }
+
+  void _ensureFaseKrsOpen(String tahunAjaranId) {
+    final fase = faseKrsTahunAktif;
+    if (fase == null) {
+      throw StateError('Admin Universitas belum membuka fase KRS');
+    }
+    if (fase.tahunAjaranId != tahunAjaranId) {
+      throw StateError('KRS hanya dapat diisi untuk tahun akademik aktif');
+    }
+    final now = DateTime.now();
+    if (!fase.aktif) {
+      throw StateError('Fase KRS telah ditutup oleh Admin Universitas');
+    }
+    if (now.isBefore(fase.mulai)) {
+      throw StateError('Fase KRS belum dimulai');
+    }
+    if (now.isAfter(fase.berakhir)) {
+      throw StateError('Batas waktu pengisian KRS telah berakhir');
+    }
   }
 
   String inputNilai({
@@ -1414,6 +1144,71 @@ class MockService {
     return (result.first['total'] as int) > 0;
   }
 
+  Future<Map<String, dynamic>> _readSeedData() async {
+    final source = await rootBundle.loadString(_seedAsset);
+    return _jsonMap(jsonDecode(source));
+  }
+
+  Future<void> _loadSeedData() async {
+    final seed = await _readSeedData();
+    _replaceFromSeed(_users, seed, 'users', _userFromJson);
+    _replaceFromSeed(_fakultas, seed, 'fakultas', _fakultasFromJson);
+    _replaceFromSeed(_prodi, seed, 'prodi', _prodiFromJson);
+    _replaceFromSeed(_tahunAjaran, seed, 'tahunAjaran', _tahunAjaranFromJson);
+    _replaceFromSeed(_mahasiswa, seed, 'mahasiswa', _mahasiswaFromJson);
+    _replaceFromSeed(
+      _riwayatStatusMahasiswa,
+      seed,
+      'riwayatStatusMahasiswa',
+      _riwayatStatusMahasiswaFromJson,
+    );
+    _replaceFromSeed(_dosen, seed, 'dosen', _dosenFromJson);
+    _replaceFromSeed(_mataKuliah, seed, 'mataKuliah', _mataKuliahFromJson);
+    _replaceFromSeed(_ruangan, seed, 'ruangan', _ruanganFromJson);
+    _replaceFromSeed(_kelas, seed, 'kelas', _kelasFromJson);
+    _replaceFromSeed(
+      _dosenPengajar,
+      seed,
+      'dosenPengajar',
+      _dosenPengajarFromJson,
+    );
+    _replaceFromSeed(_krs, seed, 'krs', _krsFromJson);
+    _replaceFromSeed(_faseKrs, seed, 'faseKrs', _faseKrsFromJson);
+    _replaceFromSeed(_nilai, seed, 'nilai', _nilaiFromJson);
+    _replaceFromSeed(_tugas, seed, 'tugas', _tugasFromJson);
+    _replaceFromSeed(_skripsi, seed, 'skripsi', _skripsiFromJson);
+    _replaceFromSeed(_magang, seed, 'magang', _magangFromJson);
+    _replaceFromSeed(_kkn, seed, 'kkn', _kknFromJson);
+    _replaceFromSeed(_pertemuan, seed, 'pertemuan', _pertemuanFromJson);
+    _replaceFromSeed(_presensi, seed, 'presensi', _presensiFromJson);
+    _replaceFromSeed(
+      _presensiDosen,
+      seed,
+      'presensiDosen',
+      _presensiDosenFromJson,
+    );
+  }
+
+  void _replaceFromSeed<T>(
+    List<T> target,
+    Map<String, dynamic> seed,
+    String key,
+    T Function(Map<String, dynamic>) fromJson,
+  ) {
+    target
+      ..clear()
+      ..addAll(_seedList(seed, key, fromJson));
+  }
+
+  List<T> _seedList<T>(
+    Map<String, dynamic> seed,
+    String key,
+    T Function(Map<String, dynamic>) fromJson,
+  ) {
+    final rows = seed[key] as List<dynamic>? ?? const [];
+    return rows.map((row) => fromJson(_jsonMap(row))).toList();
+  }
+
   Future<void> _loadState() async {
     _users
       ..clear()
@@ -1456,6 +1251,9 @@ class MockService {
     _krs
       ..clear()
       ..addAll(await _readList('krs', _krsFromJson));
+    _faseKrs
+      ..clear()
+      ..addAll(await _readList('faseKrs', _faseKrsFromJson));
     _nilai
       ..clear()
       ..addAll(await _readList('nilai', _nilaiFromJson));
@@ -1543,6 +1341,7 @@ class MockService {
         _dosenPengajar.map(_dosenPengajarToJson).toList(),
       );
       await _writeList(txn, 'krs', _krs.map(_krsToJson).toList());
+      await _writeList(txn, 'faseKrs', _faseKrs.map(_faseKrsToJson).toList());
       await _writeList(txn, 'nilai', _nilai.map(_nilaiToJson).toList());
       await _writeList(txn, 'tugas', _tugas.map(_tugasToJson).toList());
       await _writeList(txn, 'skripsi', _skripsi.map(_skripsiToJson).toList());
@@ -1672,6 +1471,20 @@ class MockService {
     semester: SemesterAkademik.values.byName(json['semester'] as String),
     tanggalMulai: _dateFromJson(json['tanggalMulai']),
     tanggalSelesai: _dateFromJson(json['tanggalSelesai']),
+    aktif: _boolFromJson(json['aktif']),
+  );
+
+  Map<String, Object?> _faseKrsToJson(FaseKrs item) => {
+    'tahunAjaranId': item.tahunAjaranId,
+    'mulai': item.mulai.toIso8601String(),
+    'berakhir': item.berakhir.toIso8601String(),
+    'aktif': _boolToInt(item.aktif),
+  };
+
+  FaseKrs _faseKrsFromJson(Map<String, dynamic> json) => FaseKrs(
+    tahunAjaranId: json['tahunAjaranId'] as String,
+    mulai: _dateFromJson(json['mulai']),
+    berakhir: _dateFromJson(json['berakhir']),
     aktif: _boolFromJson(json['aktif']),
   );
 

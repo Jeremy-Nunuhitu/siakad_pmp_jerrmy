@@ -67,7 +67,7 @@ class AppScaffold extends StatelessWidget {
             key: PageStorageKey<String>(title),
             padding: EdgeInsets.fromLTRB(20, isDesktop ? 18 : 8, 20, 24),
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            children: [RepaintBoundary(child: child)],
+            children: [child],
           ),
         ),
       ),
@@ -93,23 +93,21 @@ class InfoTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return RepaintBoundary(
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: 10),
-        child: AnimatedEntrance(
-          offset: const Offset(0, 10),
-          child: Card(
-            clipBehavior: Clip.antiAlias,
-            child: ListTile(
-              leading: Icon(icon, color: Theme.of(context).colorScheme.primary),
-              title: Text(
-                title,
-                style: const TextStyle(fontWeight: FontWeight.w800),
-              ),
-              subtitle: Text(subtitle),
-              trailing: trailing ?? const Icon(Icons.chevron_right_rounded),
-              onTap: onTap,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: AnimatedEntrance(
+        offset: const Offset(0, 10),
+        child: Card(
+          clipBehavior: Clip.antiAlias,
+          child: ListTile(
+            leading: Icon(icon, color: Theme.of(context).colorScheme.primary),
+            title: Text(
+              title,
+              style: const TextStyle(fontWeight: FontWeight.w800),
             ),
+            subtitle: Text(subtitle),
+            trailing: trailing ?? const Icon(Icons.chevron_right_rounded),
+            onTap: onTap,
           ),
         ),
       ),
