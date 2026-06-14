@@ -1321,80 +1321,275 @@ class _PimpinanDashboardViewState extends State<PimpinanDashboardView> {
   }
 }
 
-class PimpinanDataView extends StatelessWidget {
+enum _PimpinanDataMenu { mahasiswa, dosen, mataKuliah, kelasKuliah, ruangKelas }
+
+extension _PimpinanDataMenuLabel on _PimpinanDataMenu {
+  String get label {
+    switch (this) {
+      case _PimpinanDataMenu.mahasiswa:
+        return 'Mahasiswa';
+      case _PimpinanDataMenu.dosen:
+        return 'Dosen';
+      case _PimpinanDataMenu.mataKuliah:
+        return 'Mata Kuliah';
+      case _PimpinanDataMenu.kelasKuliah:
+        return 'Kelas Kuliah';
+      case _PimpinanDataMenu.ruangKelas:
+        return 'Ruang Kelas';
+    }
+  }
+
+  IconData get icon {
+    switch (this) {
+      case _PimpinanDataMenu.mahasiswa:
+        return Icons.groups_outlined;
+      case _PimpinanDataMenu.dosen:
+        return Icons.co_present_outlined;
+      case _PimpinanDataMenu.mataKuliah:
+        return Icons.menu_book_outlined;
+      case _PimpinanDataMenu.kelasKuliah:
+        return Icons.class_outlined;
+      case _PimpinanDataMenu.ruangKelas:
+        return Icons.meeting_room_outlined;
+    }
+  }
+}
+
+class PimpinanDataView extends StatefulWidget {
   const PimpinanDataView({this.user, super.key});
 
   final User? user;
 
   @override
+  State<PimpinanDataView> createState() => _PimpinanDataViewState();
+}
+
+class _PimpinanDataViewState extends State<PimpinanDataView> {
+  _PimpinanDataMenu selectedMenu = _PimpinanDataMenu.mahasiswa;
+  String? fakultasId;
+  String? prodiId;
+
+  @override
   Widget build(BuildContext context) {
     final service = context.watch<MockService>();
-    final allowedProdiIds = _allowedProdiIds(service, user);
+    final allowedProdiIds = _allowedProdiIds(service, widget.user);
+    final allowedProdi = service.prodi
+        .where((item) => allowedProdiIds.contains(item.id))
+        .toList();
+    final allowedFakultasIds = allowedProdi
+        .map((item) => item.fakultasId)
+        .toSet();
+    final allowedFakultas = service.fakultas
+        .where((item) => allowedFakultasIds.contains(item.id))
+        .toList();
+    final filteredProdi = allowedProdi.where((item) {
+      return (fakultasId == null || item.fakultasId == fakultasId) &&
+          (prodiId == null || item.id == prodiId);
+    }).toList();
+    final filteredProdiIds = filteredProdi.map((item) => item.id).toSet();
     final mahasiswa = service.mahasiswa
-        .where((item) => allowedProdiIds.contains(item.prodiId))
+        .where((item) => filteredProdiIds.contains(item.prodiId))
         .toList();
     final dosen = service.dosen
-        .where((item) => allowedProdiIds.contains(item.prodiId))
+        .where((item) => filteredProdiIds.contains(item.prodiId))
         .toList();
-    final mataKuliahIds = service.mataKuliah
-        .where((item) => allowedProdiIds.contains(item.prodiId))
-        .map((item) => item.kode)
-        .toSet();
+    final mataKuliah = service.mataKuliah
+        .where((item) => filteredProdiIds.contains(item.prodiId))
+        .toList();
+    final mataKuliahIds = mataKuliah.map((item) => item.kode).toSet();
     final kelas = service.kelas
         .where((item) => mataKuliahIds.contains(item.mataKuliahId))
         .toList();
+    final hasScopedRoomFilter =
+        fakultasId != null ||
+        prodiId != null ||
+        allowedProdiIds.length != service.prodi.length;
+    final usedRoomCodes = kelas.map((item) => item.ruangan).toSet();
+    final ruangan = service.ruangan
+        .where(
+          (item) =>
+              !hasScopedRoomFilter || usedRoomCodes.contains(item.kodeRuangan),
+        )
+        .toList();
+
+    final prodiById = {for (final item in service.prodi) item.id: item};
+    final fakultasById = {
+      for (final item in service.fakultas) item.id: item.nama,
+    };
+    String scopeLabel(String targetProdiId) {
+      final prodi = prodiById[targetProdiId];
+      if (prodi == null) return targetProdiId;
+      return '${prodi.nama} - ${fakultasById[prodi.fakultasId] ?? prodi.fakultasId}';
+    }
+
+    final listChildren = switch (selectedMenu) {
+      _PimpinanDataMenu.mahasiswa => mahasiswa
+          .map(
+            (item) => ListTile(
+              leading: const Icon(Icons.person_outline),
+              title: Text(item.nama),
+              subtitle: Text(
+                '${item.nim} - ${item.status.label}\n${scopeLabel(item.prodiId)}',
+              ),
+              isThreeLine: true,
+            ),
+          )
+          .toList(),
+      _PimpinanDataMenu.dosen => dosen
+          .map(
+            (item) => ListTile(
+              leading: const Icon(Icons.co_present_outlined),
+              title: Text(item.nama),
+              subtitle: Text('${item.nidn}\n${scopeLabel(item.prodiId)}'),
+              isThreeLine: true,
+            ),
+          )
+          .toList(),
+      _PimpinanDataMenu.mataKuliah => mataKuliah
+          .map(
+            (item) => ListTile(
+              leading: const Icon(Icons.menu_book_outlined),
+              title: Text(item.nama),
+              subtitle: Text(
+                '${item.kode} - ${item.sks} SKS\n${scopeLabel(item.prodiId)}',
+              ),
+              isThreeLine: true,
+            ),
+          )
+          .toList(),
+      _PimpinanDataMenu.kelasKuliah => kelas
+          .map(
+            (item) {
+              final mataKuliah = service.mataKuliah.firstWhere(
+                (mk) => mk.kode == item.mataKuliahId,
+              );
+              return ListTile(
+                leading: const Icon(Icons.class_outlined),
+                title: Text('${mataKuliah.nama} - ${item.id}'),
+                subtitle: Text(
+                  '${item.hari}, ${item.jam} - ${service.getRuanganName(item.ruangan)}\n'
+                  '${scopeLabel(mataKuliah.prodiId)}',
+                ),
+                isThreeLine: true,
+              );
+            },
+          )
+          .toList(),
+      _PimpinanDataMenu.ruangKelas => ruangan
+          .map(
+            (item) => ListTile(
+              leading: const Icon(Icons.meeting_room_outlined),
+              title: Text(item.namaRuangan),
+              subtitle: Text(
+                '${item.kodeRuangan} - ${item.lokasi}\n'
+                'Kapasitas ${item.kapasitasRuangan} orang',
+              ),
+              isThreeLine: true,
+            ),
+          )
+          .toList(),
+    };
+
     return AppScaffold(
-      title: 'Data Akademik Read Only',
+      title: 'Data Universitas',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const _ReadOnlyNotice(),
           const SizedBox(height: 12),
-          _DataSection(
-            title: 'Mahasiswa',
-            children: mahasiswa
-                .map(
-                  (item) => ListTile(
-                    title: Text(item.nama),
-                    subtitle: Text('${item.nim} - ${item.status.label}'),
-                  ),
-                )
-                .toList(),
-          ),
-          _DataSection(
-            title: 'Dosen',
-            children: dosen
-                .map(
-                  (item) => ListTile(
-                    title: Text(item.nama),
-                    subtitle: Text('${item.nidn} - ${item.prodiId}'),
-                  ),
-                )
-                .toList(),
-          ),
-          _DataSection(
-            title: 'Mata Kuliah dan Kelas',
-            children: kelas
-                .map(
-                  (item) => ListTile(
-                    title: Text(service.getMataKuliahName(item.mataKuliahId)),
-                    subtitle: Text(
-                      '${item.id} - ${item.hari}, ${item.jam} - ${item.ruangan}',
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Submenu Data Universitas',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                )
-                .toList(),
-          ),
-          _DataSection(
-            title: 'Ruangan',
-            children: service.ruangan
-                .map(
-                  (item) => ListTile(
-                    title: Text(item.namaRuangan),
-                    subtitle: Text('${item.kodeRuangan} - ${item.lokasi}'),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _PimpinanDataMenu.values
+                        .map(
+                          (menu) => ChoiceChip(
+                            selected: selectedMenu == menu,
+                            avatar: Icon(menu.icon, size: 18),
+                            label: Text(menu.label),
+                            onSelected: (_) => setState(() {
+                              selectedMenu = menu;
+                            }),
+                          ),
+                        )
+                        .toList(),
                   ),
-                )
-                .toList(),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  _Filter<String>(
+                    label: 'Fakultas',
+                    value: fakultasId,
+                    items: allowedFakultas
+                        .map(
+                          (item) => DropdownMenuItem(
+                            value: item.id,
+                            child: Text(item.nama),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) => setState(() {
+                      fakultasId = value;
+                      prodiId = null;
+                    }),
+                  ),
+                  _Filter<String>(
+                    label: 'Program Studi',
+                    value: prodiId,
+                    items: allowedProdi
+                        .where(
+                          (item) =>
+                              fakultasId == null ||
+                              item.fakultasId == fakultasId,
+                        )
+                        .map(
+                          (item) => DropdownMenuItem(
+                            value: item.id,
+                            child: Text(item.nama),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) => setState(() => prodiId = value),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () => setState(() {
+                      fakultasId = null;
+                      prodiId = null;
+                    }),
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Reset Filter'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _PimpinanDataList(
+            title: selectedMenu.label,
+            count: listChildren.length,
+            children: listChildren,
           ),
         ],
       ),
@@ -1697,6 +1892,7 @@ class _ReadOnlyNotice extends StatelessWidget {
 
 class _DataSection extends StatelessWidget {
   const _DataSection({required this.title, required this.children});
+
   final String title;
   final List<Widget> children;
 
@@ -1704,13 +1900,49 @@ class _DataSection extends StatelessWidget {
   Widget build(BuildContext context) => Card(
     margin: const EdgeInsets.only(bottom: 14),
     child: ExpansionTile(
-      // Keep the tile's bool state separate from the parent ListView offset.
       key: PageStorageKey<String>('pimpinan-data-section-$title'),
       initiallyExpanded: true,
       title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
       children: children.isEmpty
           ? const [ListTile(title: Text('Belum ada data'))]
           : children,
+    ),
+  );
+}
+
+class _PimpinanDataList extends StatelessWidget {
+  const _PimpinanDataList({
+    required this.title,
+    required this.count,
+    required this.children,
+  });
+
+  final String title;
+  final int count;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    margin: const EdgeInsets.only(bottom: 14),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ListTile(
+            title: Text(
+              'Data $title',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            trailing: Chip(label: Text('$count data')),
+          ),
+          const Divider(height: 1),
+          if (children.isEmpty)
+            const ListTile(title: Text('Belum ada data untuk filter ini'))
+          else
+            ...children,
+        ],
+      ),
     ),
   );
 }

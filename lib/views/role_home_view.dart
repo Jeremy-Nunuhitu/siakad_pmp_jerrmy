@@ -56,6 +56,7 @@ class _RoleHomeViewState extends State<RoleHomeView> {
                       selectedIndex: _index,
                       destinations: config.destinations,
                       onDestinationSelected: _selectIndex,
+                      onLogout: _logout,
                     ),
                     Expanded(child: pageStack),
                   ],
@@ -95,11 +96,13 @@ class _DesktopTopBar extends StatelessWidget {
     required this.selectedIndex,
     required this.destinations,
     required this.onDestinationSelected,
+    required this.onLogout,
   });
 
   final int selectedIndex;
   final List<NavigationDestination> destinations;
   final ValueChanged<int> onDestinationSelected;
+  final VoidCallback onLogout;
 
   @override
   Widget build(BuildContext context) {
@@ -229,6 +232,14 @@ class _DesktopTopBar extends StatelessWidget {
                           ? Icons.light_mode_outlined
                           : Icons.dark_mode_outlined,
                     ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Tooltip(
+                  message: 'Logout',
+                  child: IconButton.filledTonal(
+                    onPressed: onLogout,
+                    icon: const Icon(Icons.logout_rounded),
                   ),
                 ),
               ],
