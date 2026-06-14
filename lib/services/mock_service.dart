@@ -25,6 +25,7 @@ class MockService {
     await service._createSchema();
     if (await service._hasSavedState()) {
       await service._loadState();
+      service._ensureFeatureDefaults();
     } else {
       service._seedPertemuanDefaults();
       await service._saveAllAsync();
@@ -59,6 +60,33 @@ class MockService {
       name: 'Operator Prodi Informatika',
       scopeId: 'p-01',
     ),
+    const User(
+      id: 'u-004',
+      username: 'rektor',
+      password: 'password',
+      role: Role.pimpinan,
+      name: 'Rektor Universitas',
+      scopeId: 'global',
+      tingkatPimpinan: TingkatPimpinan.rektor,
+    ),
+    const User(
+      id: 'u-005',
+      username: 'dekan',
+      password: 'password',
+      role: Role.pimpinan,
+      name: 'Dekan Fakultas Teknik',
+      scopeId: 'f-01',
+      tingkatPimpinan: TingkatPimpinan.dekan,
+    ),
+    const User(
+      id: 'u-006',
+      username: 'korpro',
+      password: 'password',
+      role: Role.pimpinan,
+      name: 'Korpro Informatika',
+      scopeId: 'p-01',
+      tingkatPimpinan: TingkatPimpinan.korpro,
+    ),
   ];
 
   final List<Fakultas> _fakultas = [
@@ -70,6 +98,38 @@ class MockService {
     const Prodi(id: 'p-01', nama: 'Informatika', fakultasId: 'f-01'),
     const Prodi(id: 'p-02', nama: 'Sistem Informasi', fakultasId: 'f-01'),
     const Prodi(id: 'p-03', nama: 'Manajemen', fakultasId: 'f-02'),
+  ];
+
+  final List<TahunAjaran> _tahunAjaran = [
+    TahunAjaran(
+      id: 'ta-2024-ganjil',
+      nama: '2024/2025',
+      semester: SemesterAkademik.ganjil,
+      tanggalMulai: DateTime(2024, 8, 1),
+      tanggalSelesai: DateTime(2025, 1, 31),
+    ),
+    TahunAjaran(
+      id: 'ta-2024-genap',
+      nama: '2024/2025',
+      semester: SemesterAkademik.genap,
+      tanggalMulai: DateTime(2025, 2, 1),
+      tanggalSelesai: DateTime(2025, 7, 31),
+    ),
+    TahunAjaran(
+      id: 'ta-2025-ganjil',
+      nama: '2025/2026',
+      semester: SemesterAkademik.ganjil,
+      tanggalMulai: DateTime(2025, 8, 1),
+      tanggalSelesai: DateTime(2026, 1, 31),
+    ),
+    TahunAjaran(
+      id: 'ta-2025-genap',
+      nama: '2025/2026',
+      semester: SemesterAkademik.genap,
+      tanggalMulai: DateTime(2026, 2, 1),
+      tanggalSelesai: DateTime(2026, 7, 31),
+      aktif: true,
+    ),
   ];
 
   final List<Mahasiswa> _mahasiswa = [
@@ -110,6 +170,8 @@ class MockService {
       alamat: 'Jl. Kampus No. 8',
     ),
   ];
+
+  final List<RiwayatStatusMahasiswa> _riwayatStatusMahasiswa = [];
 
   final List<Dosen> _dosen = [
     const Dosen(
@@ -257,6 +319,7 @@ class MockService {
       bobotUts: 25,
       bobotUas: 35,
       bobotSoftskill: 15,
+      tahunAjaranId: 'ta-2025-genap',
     ),
     const Nilai(
       id: 'n-02',
@@ -273,6 +336,34 @@ class MockService {
       bobotUts: 25,
       bobotUas: 35,
       bobotSoftskill: 15,
+      tahunAjaranId: 'ta-2025-genap',
+    ),
+    const Nilai(
+      id: 'n-history-01',
+      mahasiswaId: '2406080046',
+      kelasId: 'k-01',
+      nilaiAngka: 78,
+      nilaiHuruf: 'B+',
+      semester: 1,
+      tahunAjaranId: 'ta-2024-ganjil',
+    ),
+    const Nilai(
+      id: 'n-history-02',
+      mahasiswaId: '2406080046',
+      kelasId: 'k-01',
+      nilaiAngka: 82,
+      nilaiHuruf: 'B+',
+      semester: 2,
+      tahunAjaranId: 'ta-2024-genap',
+    ),
+    const Nilai(
+      id: 'n-history-03',
+      mahasiswaId: '2406080046',
+      kelasId: 'k-01',
+      nilaiAngka: 86,
+      nilaiHuruf: 'A',
+      semester: 3,
+      tahunAjaranId: 'ta-2025-ganjil',
     ),
   ];
 
@@ -298,12 +389,16 @@ class MockService {
 
   final List<Pertemuan> _pertemuan = [];
   final List<Presensi> _presensi = [];
+  final List<PresensiDosen> _presensiDosen = [];
 
   // View read-only dibuat sekali agar build UI tidak terus membuat list baru.
   late final List<User> users = UnmodifiableListView(_users);
   late final List<Fakultas> fakultas = UnmodifiableListView(_fakultas);
   late final List<Prodi> prodi = UnmodifiableListView(_prodi);
+  late final List<TahunAjaran> tahunAjaran = UnmodifiableListView(_tahunAjaran);
   late final List<Mahasiswa> mahasiswa = UnmodifiableListView(_mahasiswa);
+  late final List<RiwayatStatusMahasiswa> riwayatStatusMahasiswa =
+      UnmodifiableListView(_riwayatStatusMahasiswa);
   late final List<Dosen> dosen = UnmodifiableListView(_dosen);
   late final List<MataKuliah> mataKuliah = UnmodifiableListView(_mataKuliah);
   late final List<Ruangan> ruangan = UnmodifiableListView(_ruangan);
@@ -319,6 +414,14 @@ class MockService {
   late final List<Kkn> kkn = UnmodifiableListView(_kkn);
   late final List<Pertemuan> pertemuan = UnmodifiableListView(_pertemuan);
   late final List<Presensi> presensi = UnmodifiableListView(_presensi);
+  late final List<PresensiDosen> presensiDosen = UnmodifiableListView(
+    _presensiDosen,
+  );
+
+  TahunAjaran get tahunAjaranAktif => _tahunAjaran.firstWhere(
+    (item) => item.aktif,
+    orElse: () => _tahunAjaran.last,
+  );
 
   void _seedPertemuanDefaults() {
     for (final k in _kelas) {
@@ -333,6 +436,72 @@ class MockService {
         );
       }
     }
+  }
+
+  void _ensureFeatureDefaults() {
+    const pimpinanDefaults = [
+      User(
+        id: 'u-004',
+        username: 'rektor',
+        password: 'password',
+        role: Role.pimpinan,
+        name: 'Rektor Universitas',
+        scopeId: 'global',
+        tingkatPimpinan: TingkatPimpinan.rektor,
+      ),
+      User(
+        id: 'u-005',
+        username: 'dekan',
+        password: 'password',
+        role: Role.pimpinan,
+        name: 'Dekan Fakultas Teknik',
+        scopeId: 'f-01',
+        tingkatPimpinan: TingkatPimpinan.dekan,
+      ),
+      User(
+        id: 'u-006',
+        username: 'korpro',
+        password: 'password',
+        role: Role.pimpinan,
+        name: 'Korpro Informatika',
+        scopeId: 'p-01',
+        tingkatPimpinan: TingkatPimpinan.korpro,
+      ),
+    ];
+    for (final user in pimpinanDefaults) {
+      if (!_users.any((item) => item.username == user.username)) {
+        _users.add(user);
+      }
+    }
+    if (_tahunAjaran.isEmpty) {
+      _tahunAjaran.addAll([
+        TahunAjaran(
+          id: 'ta-2025-genap',
+          nama: '2025/2026',
+          semester: SemesterAkademik.genap,
+          tanggalMulai: DateTime(2026, 2, 1),
+          tanggalSelesai: DateTime(2026, 7, 31),
+          aktif: true,
+        ),
+      ]);
+    }
+    for (final kelas in _kelas) {
+      for (var nomor = 1; nomor <= 16; nomor++) {
+        if (!_pertemuan.any(
+          (item) => item.kelasId == kelas.id && item.pertemuanKe == nomor,
+        )) {
+          _pertemuan.add(
+            Pertemuan(
+              id: 'ptm-${kelas.id}-$nomor',
+              kelasId: kelas.id,
+              pertemuanKe: nomor,
+              status: StatusPertemuan.belumDimulai,
+            ),
+          );
+        }
+      }
+    }
+    _saveAll();
   }
 
   User? login(String username, String password) {
@@ -526,6 +695,7 @@ class MockService {
       email: _mahasiswa[index].email,
       noHp: _mahasiswa[index].noHp,
       alamat: _mahasiswa[index].alamat,
+      status: _mahasiswa[index].status,
     );
     return _saved('Mahasiswa berhasil diperbarui');
   }
@@ -564,7 +734,59 @@ class MockService {
     _mahasiswa.removeWhere((item) => item.nim == nim);
     _nilai.removeWhere((item) => item.mahasiswaId == nim);
     _presensi.removeWhere((item) => item.mahasiswaId == nim);
+    _riwayatStatusMahasiswa.removeWhere((item) => item.mahasiswaId == nim);
     return _saved('Mahasiswa berhasil dihapus');
+  }
+
+  String ubahStatusMahasiswa({
+    required String nim,
+    required StatusMahasiswa statusBaru,
+    required String namaBukti,
+    required List<int> buktiBytes,
+  }) {
+    const maxBuktiBytes = 5 * 1024 * 1024;
+    final index = _mahasiswa.indexWhere((item) => item.nim == nim);
+    if (index == -1) throw StateError('Mahasiswa tidak ditemukan');
+    if (_mahasiswa[index].status == statusBaru) {
+      throw StateError('Pilih status yang berbeda dari status saat ini');
+    }
+    _ensureNotBlank(namaBukti, 'Bukti perubahan status');
+    if (buktiBytes.isEmpty) {
+      throw StateError('Bukti perubahan status wajib diunggah');
+    }
+    if (buktiBytes.length > maxBuktiBytes) {
+      throw StateError('Ukuran bukti maksimal 5 MB');
+    }
+    final extension = namaBukti.split('.').last.toLowerCase();
+    const allowedExtensions = {'pdf', 'jpg', 'jpeg', 'png'};
+    if (!allowedExtensions.contains(extension)) {
+      throw StateError('Bukti harus berupa PDF, JPG, JPEG, atau PNG');
+    }
+
+    final statusSebelumnya = _mahasiswa[index].status;
+    _mahasiswa[index] = _mahasiswa[index].copyWith(status: statusBaru);
+    _riwayatStatusMahasiswa.add(
+      RiwayatStatusMahasiswa(
+        id: _nextId('rsm', _riwayatStatusMahasiswa.length),
+        mahasiswaId: nim,
+        statusSebelumnya: statusSebelumnya,
+        statusBaru: statusBaru,
+        namaBukti: namaBukti.trim(),
+        tipeBukti: extension,
+        ukuranBukti: buktiBytes.length,
+        buktiBase64: base64Encode(buktiBytes),
+        diubahPada: DateTime.now(),
+      ),
+    );
+    return _saved('Status mahasiswa berhasil diperbarui');
+  }
+
+  List<RiwayatStatusMahasiswa> getRiwayatStatusMahasiswa(String nim) {
+    final items = _riwayatStatusMahasiswa
+        .where((item) => item.mahasiswaId == nim)
+        .toList();
+    items.sort((a, b) => b.diubahPada.compareTo(a.diubahPada));
+    return items;
   }
 
   String addDosen(String nidn, String nama, String prodiId) {
@@ -625,7 +847,8 @@ class MockService {
   String deleteDosen(String nidn) {
     // Dosen tidak boleh dihapus jika masih menjadi pengampu kelas.
     _ensureExists(
-      !_kelas.any((item) => item.dosenId == nidn),
+      !_kelas.any((item) => item.dosenId == nidn) &&
+          !_dosenPengajar.any((item) => item.nidnDosen == nidn),
       'Dosen tanpa kelas aktif',
     );
     _dosen.removeWhere((item) => item.nidn == nidn);
@@ -770,18 +993,24 @@ class MockService {
 
   String openKelas({
     required String mataKuliahId,
-    required String dosenId,
+    required List<String> dosenIds,
     required int kapasitas,
     required String hari,
     required String jam,
     required String ruangan,
   }) {
-    // Membuka kelas berarti memilih mata kuliah, dosen, kapasitas, dan jadwal.
+    // Membuka kelas berarti memilih mata kuliah, para dosen, kapasitas, dan jadwal.
+    final pengajarIds = dosenIds.toSet().toList();
     _ensureExists(
       _mataKuliah.any((item) => item.kode == mataKuliahId),
       'Mata kuliah',
     );
-    _ensureExists(_dosen.any((item) => item.nidn == dosenId), 'Dosen');
+    if (pengajarIds.isEmpty) {
+      throw StateError('Pilih minimal satu dosen pengajar');
+    }
+    for (final dosenId in pengajarIds) {
+      _ensureExists(_dosen.any((item) => item.nidn == dosenId), 'Dosen');
+    }
     if (kapasitas <= 0) throw StateError('Kapasitas harus lebih dari 0');
     _ensureNotBlank(hari, 'Hari');
     _ensureNotBlank(jam, 'Jam');
@@ -792,27 +1021,23 @@ class MockService {
       hari: hari,
       jam: jam,
     );
-    _ensureDosenAvailable(dosenId: dosenId, hari: hari, jam: jam);
+    for (final dosenId in pengajarIds) {
+      _ensureDosenAvailable(dosenId: dosenId, hari: hari, jam: jam);
+    }
     final newKelasId = _nextId('k', _kelas.length);
     _kelas.add(
       Kelas(
         id: newKelasId,
         mataKuliahId: mataKuliahId,
-        dosenId: dosenId,
+        dosenId: pengajarIds.first,
         kapasitas: kapasitas,
         hari: hari,
         jam: jam,
         ruangan: ruangan.trim().toUpperCase(),
+        tahunAjaranId: tahunAjaranAktif.id,
       ),
     );
-    _dosenPengajar.add(
-      DosenPengajar(
-        id: _nextId('dp', _dosenPengajar.length),
-        idKelas: newKelasId,
-        nidnDosen: dosenId,
-        peranMengajar: 'Dosen Utama',
-      ),
-    );
+    _syncDosenPengajar(newKelasId, pengajarIds);
 
     // Setelah kelas dibuat, 16 slot pertemuan ikut dibuat untuk presensi.
     for (int i = 1; i <= 16; i++) {
@@ -832,7 +1057,7 @@ class MockService {
   String updateKelas({
     required String id,
     required String mataKuliahId,
-    required String dosenId,
+    required List<String> dosenIds,
     required int kapasitas,
     required String hari,
     required String jam,
@@ -840,6 +1065,10 @@ class MockService {
   }) {
     final index = _kelas.indexWhere((item) => item.id == id);
     if (index == -1) throw StateError('Kelas tidak ditemukan');
+    final pengajarIds = dosenIds.toSet().toList();
+    if (pengajarIds.isEmpty) {
+      throw StateError('Pilih minimal satu dosen pengajar');
+    }
     final jumlahPeserta = getJumlahPesertaKelas(id);
     if (kapasitas < jumlahPeserta) {
       throw StateError('Kapasitas tidak boleh kurang dari jumlah peserta');
@@ -848,7 +1077,9 @@ class MockService {
       _mataKuliah.any((item) => item.kode == mataKuliahId),
       'Mata kuliah',
     );
-    _ensureExists(_dosen.any((item) => item.nidn == dosenId), 'Dosen');
+    for (final dosenId in pengajarIds) {
+      _ensureExists(_dosen.any((item) => item.nidn == dosenId), 'Dosen');
+    }
     _ensureRuanganAvailable(
       kodeRuangan: ruangan,
       kapasitasKelas: kapasitas,
@@ -856,22 +1087,25 @@ class MockService {
       jam: jam,
       ignoreKelasId: id,
     );
-    _ensureDosenAvailable(
-      dosenId: dosenId,
-      hari: hari,
-      jam: jam,
-      ignoreKelasId: id,
-    );
+    for (final dosenId in pengajarIds) {
+      _ensureDosenAvailable(
+        dosenId: dosenId,
+        hari: hari,
+        jam: jam,
+        ignoreKelasId: id,
+      );
+    }
     _kelas[index] = Kelas(
       id: id,
       mataKuliahId: mataKuliahId,
-      dosenId: dosenId,
+      dosenId: pengajarIds.first,
       kapasitas: kapasitas,
       hari: hari,
       jam: jam,
       ruangan: ruangan.trim().toUpperCase(),
+      tahunAjaranId: _kelas[index].tahunAjaranId,
     );
-    _syncDosenPengajarUtama(id, dosenId);
+    _syncDosenPengajar(id, pengajarIds);
     return _saved('Kelas berhasil diperbarui');
   }
 
@@ -929,6 +1163,9 @@ class MockService {
         semester: mahasiswa.semester,
         isSubmitted: false,
         isValidated: false,
+        tahunAjaranId: _kelas
+            .firstWhere((item) => item.id == kelasId)
+            .tahunAjaranId,
       ),
     );
     return _saved('KRS berhasil disimpan sebagai draft');
@@ -1070,6 +1307,7 @@ class MockService {
         nilaiUts: uts ?? angka,
         nilaiUas: uas ?? angka,
         nilaiSoftskill: softskill ?? angka,
+        tahunAjaranId: kelas.tahunAjaranId,
       ),
     );
     return _saved('Nilai berhasil disimpan');
@@ -1186,9 +1424,20 @@ class MockService {
     _prodi
       ..clear()
       ..addAll(await _readList('prodi', _prodiFromJson));
+    _tahunAjaran
+      ..clear()
+      ..addAll(await _readList('tahunAjaran', _tahunAjaranFromJson));
     _mahasiswa
       ..clear()
       ..addAll(await _readList('mahasiswa', _mahasiswaFromJson));
+    _riwayatStatusMahasiswa
+      ..clear()
+      ..addAll(
+        await _readList(
+          'riwayatStatusMahasiswa',
+          _riwayatStatusMahasiswaFromJson,
+        ),
+      );
     _dosen
       ..clear()
       ..addAll(await _readList('dosen', _dosenFromJson));
@@ -1228,6 +1477,9 @@ class MockService {
     _presensi
       ..clear()
       ..addAll(await _readList('presensi', _presensiFromJson));
+    _presensiDosen
+      ..clear()
+      ..addAll(await _readList('presensiDosen', _presensiDosenFromJson));
   }
 
   Future<List<T>> _readList<T>(
@@ -1264,8 +1516,18 @@ class MockService {
       await _writeList(txn, 'prodi', _prodi.map(_prodiToJson).toList());
       await _writeList(
         txn,
+        'tahunAjaran',
+        _tahunAjaran.map(_tahunAjaranToJson).toList(),
+      );
+      await _writeList(
+        txn,
         'mahasiswa',
         _mahasiswa.map(_mahasiswaToJson).toList(),
+      );
+      await _writeList(
+        txn,
+        'riwayatStatusMahasiswa',
+        _riwayatStatusMahasiswa.map(_riwayatStatusMahasiswaToJson).toList(),
       );
       await _writeList(txn, 'dosen', _dosen.map(_dosenToJson).toList());
       await _writeList(
@@ -1295,6 +1557,11 @@ class MockService {
         txn,
         'presensi',
         _presensi.map(_presensiToJson).toList(),
+      );
+      await _writeList(
+        txn,
+        'presensiDosen',
+        _presensiDosen.map(_presensiDosenToJson).toList(),
       );
     });
   }
@@ -1355,6 +1622,7 @@ class MockService {
     'role': item.role.name,
     'name': item.name,
     'scopeId': item.scopeId,
+    'tingkatPimpinan': item.tingkatPimpinan?.name,
   };
 
   User _userFromJson(Map<String, dynamic> json) => User(
@@ -1364,6 +1632,9 @@ class MockService {
     role: Role.values.firstWhere((item) => item.name == json['role']),
     name: json['name'] as String,
     scopeId: json['scopeId'] as String,
+    tingkatPimpinan: json['tingkatPimpinan'] == null
+        ? null
+        : TingkatPimpinan.values.byName(json['tingkatPimpinan'] as String),
   );
 
   Map<String, Object?> _fakultasToJson(Fakultas item) => {
@@ -1386,6 +1657,24 @@ class MockService {
     fakultasId: json['fakultasId'] as String,
   );
 
+  Map<String, Object?> _tahunAjaranToJson(TahunAjaran item) => {
+    'id': item.id,
+    'nama': item.nama,
+    'semester': item.semester.name,
+    'tanggalMulai': item.tanggalMulai.toIso8601String(),
+    'tanggalSelesai': item.tanggalSelesai.toIso8601String(),
+    'aktif': _boolToInt(item.aktif),
+  };
+
+  TahunAjaran _tahunAjaranFromJson(Map<String, dynamic> json) => TahunAjaran(
+    id: json['id'] as String,
+    nama: json['nama'] as String,
+    semester: SemesterAkademik.values.byName(json['semester'] as String),
+    tanggalMulai: _dateFromJson(json['tanggalMulai']),
+    tanggalSelesai: _dateFromJson(json['tanggalSelesai']),
+    aktif: _boolFromJson(json['aktif']),
+  );
+
   Map<String, Object?> _mahasiswaToJson(Mahasiswa item) => {
     'nim': item.nim,
     'nama': item.nama,
@@ -1397,6 +1686,7 @@ class MockService {
     'email': item.email,
     'noHp': item.noHp,
     'alamat': item.alamat,
+    'status': item.status.name,
   };
 
   Mahasiswa _mahasiswaFromJson(Map<String, dynamic> json) => Mahasiswa(
@@ -1410,6 +1700,40 @@ class MockService {
     email: json['email'] as String? ?? '',
     noHp: json['noHp'] as String? ?? '',
     alamat: json['alamat'] as String? ?? '',
+    status: StatusMahasiswa.values.firstWhere(
+      (item) => item.name == json['status'],
+      orElse: () => StatusMahasiswa.aktif,
+    ),
+  );
+
+  Map<String, Object?> _riwayatStatusMahasiswaToJson(
+    RiwayatStatusMahasiswa item,
+  ) => {
+    'id': item.id,
+    'mahasiswaId': item.mahasiswaId,
+    'statusSebelumnya': item.statusSebelumnya.name,
+    'statusBaru': item.statusBaru.name,
+    'namaBukti': item.namaBukti,
+    'tipeBukti': item.tipeBukti,
+    'ukuranBukti': item.ukuranBukti,
+    'buktiBase64': item.buktiBase64,
+    'diubahPada': item.diubahPada.toIso8601String(),
+  };
+
+  RiwayatStatusMahasiswa _riwayatStatusMahasiswaFromJson(
+    Map<String, dynamic> json,
+  ) => RiwayatStatusMahasiswa(
+    id: json['id'] as String,
+    mahasiswaId: json['mahasiswaId'] as String,
+    statusSebelumnya: StatusMahasiswa.values.byName(
+      json['statusSebelumnya'] as String,
+    ),
+    statusBaru: StatusMahasiswa.values.byName(json['statusBaru'] as String),
+    namaBukti: json['namaBukti'] as String,
+    tipeBukti: json['tipeBukti'] as String,
+    ukuranBukti: json['ukuranBukti'] as int,
+    buktiBase64: json['buktiBase64'] as String,
+    diubahPada: DateTime.parse(json['diubahPada'] as String),
   );
 
   Map<String, Object?> _dosenToJson(Dosen item) => {
@@ -1470,6 +1794,7 @@ class MockService {
     'hari': item.hari,
     'jam': item.jam,
     'ruangan': item.ruangan,
+    'tahunAjaranId': item.tahunAjaranId,
   };
 
   Kelas _kelasFromJson(Map<String, dynamic> json) => Kelas(
@@ -1480,6 +1805,7 @@ class MockService {
     hari: json['hari'] as String,
     jam: json['jam'] as String,
     ruangan: json['ruangan'] as String,
+    tahunAjaranId: json['tahunAjaranId'] as String? ?? 'ta-2025-genap',
   );
 
   Map<String, Object?> _dosenPengajarToJson(DosenPengajar item) => {
@@ -1506,6 +1832,7 @@ class MockService {
     'isValidated': _boolToInt(item.isValidated),
     'isRejected': _boolToInt(item.isRejected),
     'catatanDosenPa': item.catatanDosenPa,
+    'tahunAjaranId': item.tahunAjaranId,
   };
 
   KRS _krsFromJson(Map<String, dynamic> json) => KRS(
@@ -1517,6 +1844,7 @@ class MockService {
     isValidated: _boolFromJson(json['isValidated']),
     isRejected: _boolFromJson(json['isRejected']),
     catatanDosenPa: json['catatanDosenPa'] as String? ?? '',
+    tahunAjaranId: json['tahunAjaranId'] as String? ?? 'ta-2025-genap',
   );
 
   Map<String, Object?> _nilaiToJson(Nilai item) => {
@@ -1534,6 +1862,7 @@ class MockService {
     'bobotUts': item.bobotUts,
     'bobotUas': item.bobotUas,
     'bobotSoftskill': item.bobotSoftskill,
+    'tahunAjaranId': item.tahunAjaranId,
   };
 
   Nilai _nilaiFromJson(Map<String, dynamic> json) => Nilai(
@@ -1551,6 +1880,7 @@ class MockService {
     bobotUts: (json['bobotUts'] as num? ?? 25).toDouble(),
     bobotUas: (json['bobotUas'] as num? ?? 35).toDouble(),
     bobotSoftskill: (json['bobotSoftskill'] as num? ?? 15).toDouble(),
+    tahunAjaranId: json['tahunAjaranId'] as String? ?? 'ta-2025-genap',
   );
 
   Map<String, Object?> _tugasToJson(Tugas item) => {
@@ -1650,6 +1980,8 @@ class MockService {
     'pertemuanId': item.pertemuanId,
     'mahasiswaId': item.mahasiswaId,
     'statusKehadiran': item.statusKehadiran,
+    'waktuPresensi': item.waktuPresensi?.toIso8601String(),
+    'catatan': item.catatan,
   };
 
   Presensi _presensiFromJson(Map<String, dynamic> json) => Presensi(
@@ -1657,7 +1989,28 @@ class MockService {
     pertemuanId: json['pertemuanId'] as String,
     mahasiswaId: json['mahasiswaId'] as String,
     statusKehadiran: json['statusKehadiran'] as String,
+    waktuPresensi: _nullableDateFromJson(json['waktuPresensi']),
+    catatan: json['catatan'] as String? ?? '',
   );
+
+  Map<String, Object?> _presensiDosenToJson(PresensiDosen item) => {
+    'id': item.id,
+    'pertemuanId': item.pertemuanId,
+    'dosenId': item.dosenId,
+    'statusKehadiran': item.statusKehadiran,
+    'waktuPresensi': item.waktuPresensi.toIso8601String(),
+    'catatan': item.catatan,
+  };
+
+  PresensiDosen _presensiDosenFromJson(Map<String, dynamic> json) =>
+      PresensiDosen(
+        id: json['id'] as String,
+        pertemuanId: json['pertemuanId'] as String,
+        dosenId: json['dosenId'] as String,
+        statusKehadiran: json['statusKehadiran'] as String,
+        waktuPresensi: _dateFromJson(json['waktuPresensi']),
+        catatan: json['catatan'] as String? ?? '',
+      );
 
   void _ensureDosenPaValid(String prodiId, String dosenId) {
     _ensureNotBlank(dosenId, 'Dosen PA');
@@ -1806,12 +2159,15 @@ class MockService {
     return _saved('Pengajuan KKN berhasil disimpan');
   }
 
-  void mulaiPertemuan(String pertemuanId, String materi) {
+  void mulaiPertemuan(String pertemuanId, String materi, {String? dosenId}) {
     // Pertemuan dimulai oleh dosen sebelum presensi bisa disimpan.
     final index = _pertemuan.indexWhere((p) => p.id == pertemuanId);
     if (index == -1) throw StateError('Pertemuan tidak ditemukan');
 
     final current = _pertemuan[index];
+    if (dosenId != null && !isDosenMengajarKelas(dosenId, current.kelasId)) {
+      throw StateError('Akses ditolak. Dosen bukan pengajar kelas ini');
+    }
     if (current.status != StatusPertemuan.belumDimulai) {
       throw StateError('Pertemuan sudah dimulai sebelumnya');
     }
@@ -1824,11 +2180,14 @@ class MockService {
     _saveAll();
   }
 
-  void selesaikanPertemuan(String pertemuanId) {
+  void selesaikanPertemuan(String pertemuanId, {String? dosenId}) {
     final index = _pertemuan.indexWhere((p) => p.id == pertemuanId);
     if (index == -1) throw StateError('Pertemuan tidak ditemukan');
 
     final current = _pertemuan[index];
+    if (dosenId != null && !isDosenMengajarKelas(dosenId, current.kelasId)) {
+      throw StateError('Akses ditolak. Dosen bukan pengajar kelas ini');
+    }
     if (current.status == StatusPertemuan.belumDimulai) {
       throw StateError('Pertemuan belum dimulai');
     }
@@ -1840,13 +2199,20 @@ class MockService {
     _saveAll();
   }
 
-  void simpanPresensi(String pertemuanId, Map<String, String> statusMap) {
+  void simpanPresensi(
+    String pertemuanId,
+    Map<String, String> statusMap, {
+    String? dosenId,
+  }) {
     // Presensi disimpan per pertemuan. Data lama untuk pertemuan yang sama
     // diganti supaya edit presensi tidak menghasilkan duplikasi.
     final index = _pertemuan.indexWhere((p) => p.id == pertemuanId);
     if (index == -1) throw StateError('Pertemuan tidak ditemukan');
 
     final current = _pertemuan[index];
+    if (dosenId != null && !isDosenMengajarKelas(dosenId, current.kelasId)) {
+      throw StateError('Akses ditolak. Dosen bukan pengajar kelas ini');
+    }
     if (current.status == StatusPertemuan.belumDimulai) {
       throw StateError('Pertemuan belum dimulai');
     }
@@ -1860,32 +2226,96 @@ class MockService {
           pertemuanId: pertemuanId,
           mahasiswaId: mahasiswaId,
           statusKehadiran: status,
+          waktuPresensi: DateTime.now(),
         ),
       );
     });
     _saveAll();
   }
 
-  void _syncDosenPengajarUtama(String kelasId, String dosenId) {
-    final index = _dosenPengajar.indexWhere((item) => item.idKelas == kelasId);
-    if (index == -1) {
+  String isiPresensiMahasiswa({
+    required String pertemuanId,
+    required String mahasiswaId,
+  }) {
+    final pertemuan = _pertemuan.where((item) => item.id == pertemuanId);
+    if (pertemuan.isEmpty) throw StateError('Pertemuan tidak ditemukan');
+    if (pertemuan.first.status != StatusPertemuan.berlangsung) {
+      throw StateError('Presensi hanya dapat diisi saat pertemuan dibuka');
+    }
+    if (!_krs.any(
+      (item) =>
+          item.kelasId == pertemuan.first.kelasId &&
+          item.mahasiswaId == mahasiswaId &&
+          item.isValidated,
+    )) {
+      throw StateError('Akses ditolak. Mahasiswa tidak terdaftar di kelas');
+    }
+    if (_presensi.any(
+      (item) =>
+          item.pertemuanId == pertemuanId && item.mahasiswaId == mahasiswaId,
+    )) {
+      throw StateError('Presensi sudah pernah diisi');
+    }
+    _presensi.add(
+      Presensi(
+        id: _nextId('prs', _presensi.length),
+        pertemuanId: pertemuanId,
+        mahasiswaId: mahasiswaId,
+        statusKehadiran: 'Hadir',
+        waktuPresensi: DateTime.now(),
+      ),
+    );
+    return _saved('Presensi berhasil disimpan');
+  }
+
+  String isiPresensiDosen({
+    required String pertemuanId,
+    required String dosenId,
+    required String status,
+    String catatan = '',
+  }) {
+    const allowed = {'Hadir', 'Izin', 'Sakit', 'Alfa'};
+    if (!allowed.contains(status)) {
+      throw StateError('Status presensi tidak valid');
+    }
+    final pertemuan = _pertemuan.where((item) => item.id == pertemuanId);
+    if (pertemuan.isEmpty) throw StateError('Pertemuan tidak ditemukan');
+    if (!isDosenMengajarKelas(dosenId, pertemuan.first.kelasId)) {
+      throw StateError('Akses ditolak. Dosen bukan pengajar kelas ini');
+    }
+    if (pertemuan.first.status == StatusPertemuan.belumDimulai) {
+      throw StateError('Pertemuan belum dibuka');
+    }
+    if (_presensiDosen.any(
+      (item) => item.pertemuanId == pertemuanId && item.dosenId == dosenId,
+    )) {
+      throw StateError('Presensi dosen sudah pernah diisi');
+    }
+    _presensiDosen.add(
+      PresensiDosen(
+        id: _nextId('prd', _presensiDosen.length),
+        pertemuanId: pertemuanId,
+        dosenId: dosenId,
+        statusKehadiran: status,
+        waktuPresensi: DateTime.now(),
+        catatan: catatan.trim(),
+      ),
+    );
+    return _saved('Presensi dosen berhasil disimpan');
+  }
+
+  void _syncDosenPengajar(String kelasId, List<String> dosenIds) {
+    _dosenPengajar.removeWhere((item) => item.idKelas == kelasId);
+    for (var index = 0; index < dosenIds.length; index++) {
       _dosenPengajar.add(
         DosenPengajar(
           id: _nextId('dp', _dosenPengajar.length),
           idKelas: kelasId,
-          nidnDosen: dosenId,
-          peranMengajar: 'Dosen Utama',
+          nidnDosen: dosenIds[index],
+          peranMengajar: index == 0 ? 'Dosen Utama' : 'Dosen Pendamping',
         ),
       );
-      return;
     }
-
-    _dosenPengajar[index] = DosenPengajar(
-      id: _dosenPengajar[index].id,
-      idKelas: kelasId,
-      nidnDosen: dosenId,
-      peranMengajar: _dosenPengajar[index].peranMengajar,
-    );
   }
 
   void _ensureRuanganAvailable({

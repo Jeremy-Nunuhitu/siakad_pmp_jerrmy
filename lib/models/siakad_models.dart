@@ -1,4 +1,26 @@
-enum Role { mahasiswa, dosen, adminProdi, adminFakultas, adminUniversitas }
+enum Role {
+  mahasiswa,
+  dosen,
+  pimpinan,
+  adminProdi,
+  adminFakultas,
+  adminUniversitas,
+}
+
+enum TingkatPimpinan { rektor, dekan, korpro }
+
+extension TingkatPimpinanLabel on TingkatPimpinan {
+  String get label {
+    switch (this) {
+      case TingkatPimpinan.rektor:
+        return 'Rektor';
+      case TingkatPimpinan.dekan:
+        return 'Dekan';
+      case TingkatPimpinan.korpro:
+        return 'Koordinator Program Studi';
+    }
+  }
+}
 
 // Extension ini menerjemahkan nilai enum role menjadi teks yang tampil di UI.
 extension RoleLabel on Role {
@@ -8,6 +30,8 @@ extension RoleLabel on Role {
         return 'Mahasiswa';
       case Role.dosen:
         return 'Dosen';
+      case Role.pimpinan:
+        return 'Pimpinan';
       case Role.adminProdi:
         return 'Operator Prodi';
       case Role.adminFakultas:
@@ -26,6 +50,7 @@ class User {
     required this.role,
     required this.name,
     required this.scopeId,
+    this.tingkatPimpinan,
   });
 
   final String id;
@@ -36,6 +61,7 @@ class User {
   // scopeId membatasi area kerja user:
   // NIM untuk mahasiswa, NIDN untuk dosen, id prodi/fakultas untuk admin.
   final String scopeId;
+  final TingkatPimpinan? tingkatPimpinan;
 }
 
 class Fakultas {
@@ -53,6 +79,51 @@ class Prodi {
   final String fakultasId;
 }
 
+enum SemesterAkademik { ganjil, genap }
+
+extension SemesterAkademikLabel on SemesterAkademik {
+  String get label => this == SemesterAkademik.ganjil ? 'Ganjil' : 'Genap';
+}
+
+class TahunAjaran {
+  const TahunAjaran({
+    required this.id,
+    required this.nama,
+    required this.semester,
+    required this.tanggalMulai,
+    required this.tanggalSelesai,
+    this.aktif = false,
+  });
+
+  final String id;
+  final String nama;
+  final SemesterAkademik semester;
+  final DateTime tanggalMulai;
+  final DateTime tanggalSelesai;
+  final bool aktif;
+
+  String get label => '$nama ${semester.label}';
+}
+
+enum StatusMahasiswa { aktif, cuti, nonaktif, lulus, dropOut }
+
+extension StatusMahasiswaLabel on StatusMahasiswa {
+  String get label {
+    switch (this) {
+      case StatusMahasiswa.aktif:
+        return 'Aktif';
+      case StatusMahasiswa.cuti:
+        return 'Cuti';
+      case StatusMahasiswa.nonaktif:
+        return 'Nonaktif';
+      case StatusMahasiswa.lulus:
+        return 'Lulus';
+      case StatusMahasiswa.dropOut:
+        return 'Drop Out';
+    }
+  }
+}
+
 class Mahasiswa {
   const Mahasiswa({
     required this.nim,
@@ -65,6 +136,7 @@ class Mahasiswa {
     this.email = '',
     this.noHp = '',
     this.alamat = '',
+    this.status = StatusMahasiswa.aktif,
   });
 
   final String nim;
@@ -77,6 +149,7 @@ class Mahasiswa {
   final String email;
   final String noHp;
   final String alamat;
+  final StatusMahasiswa status;
 
   Mahasiswa copyWith({
     String? nim,
@@ -89,6 +162,7 @@ class Mahasiswa {
     String? email,
     String? noHp,
     String? alamat,
+    StatusMahasiswa? status,
   }) {
     return Mahasiswa(
       nim: nim ?? this.nim,
@@ -101,8 +175,33 @@ class Mahasiswa {
       email: email ?? this.email,
       noHp: noHp ?? this.noHp,
       alamat: alamat ?? this.alamat,
+      status: status ?? this.status,
     );
   }
+}
+
+class RiwayatStatusMahasiswa {
+  const RiwayatStatusMahasiswa({
+    required this.id,
+    required this.mahasiswaId,
+    required this.statusSebelumnya,
+    required this.statusBaru,
+    required this.namaBukti,
+    required this.tipeBukti,
+    required this.ukuranBukti,
+    required this.buktiBase64,
+    required this.diubahPada,
+  });
+
+  final String id;
+  final String mahasiswaId;
+  final StatusMahasiswa statusSebelumnya;
+  final StatusMahasiswa statusBaru;
+  final String namaBukti;
+  final String tipeBukti;
+  final int ukuranBukti;
+  final String buktiBase64;
+  final DateTime diubahPada;
 }
 
 class Dosen {
@@ -172,6 +271,7 @@ class Kelas {
     required this.hari,
     required this.jam,
     required this.ruangan,
+    this.tahunAjaranId = 'ta-2025-genap',
   });
 
   final String id;
@@ -184,6 +284,7 @@ class Kelas {
   // Field ini menyimpan kode ruangan. Nama/lokasi ruangan dibaca dari model
   // Ruangan agar kelas bisa divalidasi terhadap kapasitas dan bentrok jadwal.
   final String ruangan;
+  final String tahunAjaranId;
 }
 
 class Ruangan {
@@ -255,6 +356,7 @@ class KRS {
     this.isValidated = false,
     this.isRejected = false,
     this.catatanDosenPa = '',
+    this.tahunAjaranId = 'ta-2025-genap',
   });
 
   final String id;
@@ -267,6 +369,7 @@ class KRS {
   final bool isValidated;
   final bool isRejected;
   final String catatanDosenPa;
+  final String tahunAjaranId;
 
   KrsStatus get status {
     if (isValidated) return KrsStatus.disetujui;
@@ -286,6 +389,7 @@ class KRS {
     bool? isValidated,
     bool? isRejected,
     String? catatanDosenPa,
+    String? tahunAjaranId,
   }) {
     return KRS(
       id: id ?? this.id,
@@ -296,6 +400,7 @@ class KRS {
       isValidated: isValidated ?? this.isValidated,
       isRejected: isRejected ?? this.isRejected,
       catatanDosenPa: catatanDosenPa ?? this.catatanDosenPa,
+      tahunAjaranId: tahunAjaranId ?? this.tahunAjaranId,
     );
   }
 }
@@ -316,6 +421,7 @@ class Nilai {
     this.bobotUts = 25,
     this.bobotUas = 35,
     this.bobotSoftskill = 15,
+    this.tahunAjaranId = 'ta-2025-genap',
   });
 
   final String id;
@@ -332,6 +438,7 @@ class Nilai {
   final double bobotUts;
   final double bobotUas;
   final double bobotSoftskill;
+  final String tahunAjaranId;
 
   double get subBobotTugas => nilaiTugas * bobotTugas / 100;
   double get subBobotUts => nilaiUts * bobotUts / 100;
@@ -487,10 +594,32 @@ class Presensi {
     required this.pertemuanId,
     required this.mahasiswaId,
     required this.statusKehadiran,
+    this.waktuPresensi,
+    this.catatan = '',
   });
 
   final String id;
   final String pertemuanId;
   final String mahasiswaId;
   final String statusKehadiran; // 'Hadir', 'Ijin', 'Sakit', 'Alpa'
+  final DateTime? waktuPresensi;
+  final String catatan;
+}
+
+class PresensiDosen {
+  const PresensiDosen({
+    required this.id,
+    required this.pertemuanId,
+    required this.dosenId,
+    required this.statusKehadiran,
+    required this.waktuPresensi,
+    this.catatan = '',
+  });
+
+  final String id;
+  final String pertemuanId;
+  final String dosenId;
+  final String statusKehadiran;
+  final DateTime waktuPresensi;
+  final String catatan;
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../models/siakad_models.dart';
@@ -340,6 +341,258 @@ class MahasiswaManagementView extends StatelessWidget {
       ),
     );
   }
+}
+
+class StatusMahasiswaManagementView extends StatelessWidget {
+  const StatusMahasiswaManagementView({required this.prodiId, super.key});
+
+  final String prodiId;
+
+  @override
+  Widget build(BuildContext context) {
+    final mahasiswaVm = context.watch<MahasiswaViewModel>();
+    final service = context.read<MockService>();
+    final mahasiswa = mahasiswaVm.items(prodiId: prodiId);
+
+    return AppScaffold(
+      title: 'Kelola Status Mahasiswa',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                'Setiap perubahan status wajib disertai bukti PDF/JPG/JPEG/PNG dengan ukuran maksimal 5 MB.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _SearchableList<Mahasiswa>(
+            items: mahasiswa,
+            hintText: 'Cari nama, NIM, atau status mahasiswa',
+            searchableText: (item) =>
+                '${item.nama} ${item.nim} ${item.status.label}',
+            itemBuilder: (context, item, index) => InfoTile(
+              icon: Icons.manage_accounts_outlined,
+              title: item.nama,
+              subtitle: '${item.nim} - Status: ${item.status.label}',
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Lihat riwayat status',
+                    onPressed: () => _showRiwayatStatus(context, item, service),
+                    icon: const Icon(Icons.history_rounded),
+                  ),
+                  FilledButton.tonalIcon(
+                    onPressed: () => _ubahStatusMahasiswa(context, item),
+                    icon: const Icon(Icons.edit_outlined),
+                    label: const Text('Ubah Status'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+Future<void> _ubahStatusMahasiswa(
+  BuildContext context,
+  Mahasiswa mahasiswa,
+) async {
+  final vm = context.read<MahasiswaViewModel>();
+  var selectedStatus = StatusMahasiswa.values.firstWhere(
+    (status) => status != mahasiswa.status,
+  );
+  PlatformFile? selectedFile;
+  String? fileError;
+
+  await showDialog<void>(
+    context: context,
+    builder: (context) {
+      return StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            title: Text('Ubah Status ${mahasiswa.nama}'),
+            content: SizedBox(
+              width: 520,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      '${mahasiswa.nim} - Status saat ini: ${mahasiswa.status.label}',
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<StatusMahasiswa>(
+                      initialValue: selectedStatus,
+                      decoration: const InputDecoration(
+                        labelText: 'Status Baru',
+                      ),
+                      items: [
+                        for (final status in StatusMahasiswa.values)
+                          if (status != mahasiswa.status)
+                            DropdownMenuItem(
+                              value: status,
+                              child: Text(status.label),
+                            ),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          setState(() => selectedStatus = value);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        final result = await FilePicker.platform.pickFiles(
+                          type: FileType.custom,
+                          allowedExtensions: const [
+                            'pdf',
+                            'jpg',
+                            'jpeg',
+                            'png',
+                          ],
+                          withData: true,
+                        );
+                        if (result == null) return;
+                        final file = result.files.single;
+                        setState(() {
+                          if (file.size > 5 * 1024 * 1024) {
+                            selectedFile = null;
+                            fileError = 'Ukuran file melebihi batas 5 MB';
+                          } else if (file.bytes == null || file.bytes!.isEmpty) {
+                            selectedFile = null;
+                            fileError = 'File tidak dapat dibaca';
+                          } else {
+                            selectedFile = file;
+                            fileError = null;
+                          }
+                        });
+                      },
+                      icon: const Icon(Icons.upload_file_outlined),
+                      label: const Text('Upload Bukti Wajib'),
+                    ),
+                    const SizedBox(height: 8),
+                    if (selectedFile != null)
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.task_outlined),
+                        title: Text(selectedFile!.name),
+                        subtitle: Text(_formatFileSize(selectedFile!.size)),
+                        trailing: IconButton(
+                          tooltip: 'Hapus file',
+                          onPressed: () => setState(() => selectedFile = null),
+                          icon: const Icon(Icons.close),
+                        ),
+                      )
+                    else
+                      Text(
+                        fileError ??
+                            'Format: PDF, JPG, JPEG, PNG. Maksimal 5 MB.',
+                        style: TextStyle(
+                          color: fileError == null
+                              ? Theme.of(context).colorScheme.onSurfaceVariant
+                              : Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Batal'),
+              ),
+              FilledButton(
+                onPressed: selectedFile?.bytes == null
+                    ? null
+                    : () {
+                        vm.ubahStatus(
+                          nim: mahasiswa.nim,
+                          statusBaru: selectedStatus,
+                          namaBukti: selectedFile!.name,
+                          buktiBytes: selectedFile!.bytes!,
+                        );
+                        showAppMessage(context, vm.message);
+                        if ((vm.message ?? '').startsWith(
+                          'Status mahasiswa berhasil',
+                        )) {
+                          Navigator.pop(context);
+                        }
+                      },
+                child: const Text('Simpan Perubahan'),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  );
+}
+
+Future<void> _showRiwayatStatus(
+  BuildContext context,
+  Mahasiswa mahasiswa,
+  MockService service,
+) {
+  final riwayat = service.getRiwayatStatusMahasiswa(mahasiswa.nim);
+  return showDialog<void>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text('Riwayat Status ${mahasiswa.nama}'),
+      content: SizedBox(
+        width: 560,
+        child: riwayat.isEmpty
+            ? const Text('Belum ada perubahan status.')
+            : ListView.separated(
+                shrinkWrap: true,
+                itemCount: riwayat.length,
+                separatorBuilder: (_, _) => const Divider(),
+                itemBuilder: (context, index) {
+                  final item = riwayat[index];
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.description_outlined),
+                    title: Text(
+                      '${item.statusSebelumnya.label} menjadi ${item.statusBaru.label}',
+                    ),
+                    subtitle: Text(
+                      '${item.namaBukti} (${_formatFileSize(item.ukuranBukti)})\n${_formatDateTime(item.diubahPada)}',
+                    ),
+                  );
+                },
+              ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Tutup'),
+        ),
+      ],
+    ),
+  );
+}
+
+String _formatFileSize(int bytes) {
+  if (bytes >= 1024 * 1024) {
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
+  }
+  return '${(bytes / 1024).toStringAsFixed(1)} KB';
+}
+
+String _formatDateTime(DateTime value) {
+  String twoDigits(int number) => number.toString().padLeft(2, '0');
+  return '${twoDigits(value.day)}/${twoDigits(value.month)}/${value.year} '
+      '${twoDigits(value.hour)}:${twoDigits(value.minute)}';
 }
 
 class DosenManagementView extends StatelessWidget {
@@ -1140,6 +1393,231 @@ Future<void> _deleteMataKuliah(BuildContext context, String kode) async {
   if (context.mounted) showAppMessage(context, vm.message);
 }
 
+class _DosenMultiSelectField extends StatelessWidget {
+  const _DosenMultiSelectField({
+    required this.dosen,
+    required this.selectedIds,
+    required this.onChanged,
+  });
+
+  final List<Dosen> dosen;
+  final Set<String> selectedIds;
+  final ValueChanged<Set<String>> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedDosen = [
+      for (final id in selectedIds)
+        if (dosen.any((item) => item.nidn == id))
+          dosen.firstWhere((item) => item.nidn == id),
+    ];
+
+    return InputDecorator(
+      decoration: const InputDecoration(
+        labelText: 'Dosen Pengajar',
+        border: OutlineInputBorder(),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (selectedDosen.isEmpty)
+            Text(
+              'Belum ada dosen dipilih',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            )
+          else ...[
+            Text(
+              '${selectedDosen.length} dosen dipilih. Pilihan pertama menjadi dosen utama.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (var index = 0; index < selectedDosen.length; index++)
+                  InputChip(
+                    avatar: index == 0
+                        ? const Icon(Icons.star_rounded, size: 18)
+                        : null,
+                    label: Text(
+                      index == 0
+                          ? '${selectedDosen[index].nama} (Utama)'
+                          : selectedDosen[index].nama,
+                    ),
+                    onDeleted: () {
+                      final updated = Set<String>.from(selectedIds)
+                        ..remove(selectedDosen[index].nidn);
+                      onChanged(updated);
+                    },
+                  ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: dosen.isEmpty
+                ? null
+                : () async {
+                    final result = await _showDosenPicker(
+                      context,
+                      dosen: dosen,
+                      selectedIds: selectedIds,
+                    );
+                    if (result != null) onChanged(result);
+                  },
+            icon: const Icon(Icons.person_search_outlined),
+            label: Text(
+              selectedDosen.isEmpty ? 'Pilih Dosen' : 'Ubah Pilihan Dosen',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+Future<Set<String>?> _showDosenPicker(
+  BuildContext context, {
+  required List<Dosen> dosen,
+  required Set<String> selectedIds,
+}) {
+  final searchController = TextEditingController();
+  final pendingIds = Set<String>.from(selectedIds);
+
+  return showDialog<Set<String>>(
+    context: context,
+    builder: (context) {
+      return StatefulBuilder(
+        builder: (context, setState) {
+          final query = searchController.text.trim().toLowerCase();
+          final filtered = dosen.where((item) {
+            return query.isEmpty ||
+                item.nama.toLowerCase().contains(query) ||
+                item.nidn.toLowerCase().contains(query);
+          }).toList()..sort((a, b) {
+            final aSelected = pendingIds.contains(a.nidn);
+            final bSelected = pendingIds.contains(b.nidn);
+            if (aSelected != bSelected) return aSelected ? -1 : 1;
+            return a.nama.compareTo(b.nama);
+          });
+
+          return AlertDialog(
+            title: const Text('Pilih Dosen Pengajar'),
+            content: SizedBox(
+              width: 560,
+              height: 520,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextField(
+                    controller: searchController,
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      labelText: 'Cari nama atau NIDN',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: query.isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: 'Hapus pencarian',
+                              onPressed: () {
+                                searchController.clear();
+                                setState(() {});
+                              },
+                              icon: const Icon(Icons.clear),
+                            ),
+                    ),
+                    onChanged: (_) => setState(() {}),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    '${pendingIds.length} dipilih - ${filtered.length} hasil',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 4),
+                  Expanded(
+                    child: filtered.isEmpty
+                        ? const Center(child: Text('Dosen tidak ditemukan'))
+                        : ListView.builder(
+                            itemCount: filtered.length,
+                            itemBuilder: (context, index) {
+                              final item = filtered[index];
+                              final selected = pendingIds.contains(item.nidn);
+                              final selectedIndex = pendingIds
+                                  .toList()
+                                  .indexOf(item.nidn);
+                              return CheckboxListTile(
+                                value: selected,
+                                title: Text(item.nama),
+                                subtitle: Text(
+                                  selectedIndex == 0
+                                      ? '${item.nidn} - Dosen Utama'
+                                      : item.nidn,
+                                ),
+                                secondary: selected
+                                    ? IconButton(
+                                        tooltip: selectedIndex == 0
+                                            ? 'Dosen utama'
+                                            : 'Jadikan dosen utama',
+                                        onPressed: selectedIndex == 0
+                                            ? null
+                                            : () {
+                                                setState(() {
+                                                  final reordered = [
+                                                    item.nidn,
+                                                    ...pendingIds.where(
+                                                      (id) => id != item.nidn,
+                                                    ),
+                                                  ];
+                                                  pendingIds
+                                                    ..clear()
+                                                    ..addAll(reordered);
+                                                });
+                                              },
+                                        icon: Icon(
+                                          selectedIndex == 0
+                                              ? Icons.star_rounded
+                                              : Icons.star_outline_rounded,
+                                        ),
+                                      )
+                                    : const Icon(Icons.person_outline),
+                                onChanged: (checked) {
+                                  setState(() {
+                                    if (checked ?? false) {
+                                      pendingIds.add(item.nidn);
+                                    } else {
+                                      pendingIds.remove(item.nidn);
+                                    }
+                                  });
+                                },
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Batal'),
+              ),
+              FilledButton(
+                onPressed: pendingIds.isEmpty
+                    ? null
+                    : () => Navigator.pop(context, pendingIds),
+                child: Text('Terapkan (${pendingIds.length})'),
+              ),
+            ],
+          );
+        },
+      );
+    },
+  ).whenComplete(searchController.dispose);
+}
+
 Future<void> _openKelasDialog(BuildContext context, String prodiId) async {
   final vm = context.read<KelasViewModel>();
   final service = context.read<MockService>();
@@ -1151,7 +1629,7 @@ Future<void> _openKelasDialog(BuildContext context, String prodiId) async {
   String? selectedMataKuliah = mataKuliah.isEmpty
       ? null
       : mataKuliah.first.kode;
-  String? selectedDosen = dosen.isEmpty ? null : dosen.first.nidn;
+  final selectedDosenIds = <String>{};
   String? selectedRuangan = ruangan.isEmpty ? null : ruangan.first.kodeRuangan;
   String selectedHari = 'Senin';
   final kapasitasController = TextEditingController(text: '30');
@@ -1183,20 +1661,15 @@ Future<void> _openKelasDialog(BuildContext context, String prodiId) async {
                     },
                   ),
                   const SizedBox(height: 8),
-                  DropdownButtonFormField<String>(
-                    initialValue: selectedDosen,
-                    decoration: const InputDecoration(
-                      labelText: 'Dosen Pengajar',
-                    ),
-                    items: [
-                      for (final item in dosen)
-                        DropdownMenuItem(
-                          value: item.nidn,
-                          child: Text('${item.nama} (${item.nidn})'),
-                        ),
-                    ],
+                  _DosenMultiSelectField(
+                    dosen: dosen,
+                    selectedIds: selectedDosenIds,
                     onChanged: (value) {
-                      setState(() => selectedDosen = value);
+                      setState(() {
+                        selectedDosenIds
+                          ..clear()
+                          ..addAll(value);
+                      });
                     },
                   ),
                   const SizedBox(height: 8),
@@ -1259,7 +1732,7 @@ Future<void> _openKelasDialog(BuildContext context, String prodiId) async {
           FilledButton(
             onPressed: () {
               if (selectedMataKuliah == null ||
-                  selectedDosen == null ||
+                  selectedDosenIds.isEmpty ||
                   selectedRuangan == null) {
                 showAppMessage(
                   context,
@@ -1269,7 +1742,7 @@ Future<void> _openKelasDialog(BuildContext context, String prodiId) async {
               }
               vm.open(
                 mataKuliahId: selectedMataKuliah!,
-                dosenId: selectedDosen!,
+                dosenIds: selectedDosenIds.toList(),
                 kapasitas: int.tryParse(kapasitasController.text) ?? 0,
                 hari: selectedHari,
                 jam: jamController.text,
@@ -1297,6 +1770,16 @@ Future<void> _editKelas(BuildContext context, Kelas item) async {
   String selectedHari = item.hari;
   final jamController = TextEditingController(text: item.jam);
   String selectedRuangan = item.ruangan;
+  final mataKuliah = service.mataKuliah.firstWhere(
+    (mk) => mk.kode == item.mataKuliahId,
+  );
+  final dosen = service.dosen
+      .where((lecturer) => lecturer.prodiId == mataKuliah.prodiId)
+      .toList();
+  final selectedDosenIds = service
+      .getDosenPengajarKelas(item.id)
+      .map((pengajar) => pengajar.nidnDosen)
+      .toSet();
 
   await showDialog<void>(
     context: context,
@@ -1309,6 +1792,18 @@ Future<void> _editKelas(BuildContext context, Kelas item) async {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  _DosenMultiSelectField(
+                    dosen: dosen,
+                    selectedIds: selectedDosenIds,
+                    onChanged: (value) {
+                      setState(() {
+                        selectedDosenIds
+                          ..clear()
+                          ..addAll(value);
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
                     initialValue: selectedRuangan,
                     decoration: const InputDecoration(labelText: 'Ruangan'),
@@ -1369,10 +1864,14 @@ Future<void> _editKelas(BuildContext context, Kelas item) async {
           ),
           FilledButton(
             onPressed: () {
+              if (selectedDosenIds.isEmpty) {
+                showAppMessage(context, 'Pilih minimal satu dosen pengajar');
+                return;
+              }
               vm.update(
                 id: item.id,
                 mataKuliahId: item.mataKuliahId,
-                dosenId: item.dosenId,
+                dosenIds: selectedDosenIds.toList(),
                 kapasitas: int.tryParse(kapasitasController.text) ?? 0,
                 hari: selectedHari,
                 jam: jamController.text,

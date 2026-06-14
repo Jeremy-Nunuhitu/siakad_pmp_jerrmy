@@ -52,7 +52,7 @@ class SiakadApp extends StatelessWidget {
           // MaterialApp dibangun ulang saat tema berubah.
           // Halaman pertama selalu SplashView, lalu diarahkan ke LoginView.
           return MaterialApp(
-            title: 'SIAKAD Jeremy',
+            title: 'SIAKAD Jeremy Nunuhitu',
             debugShowCheckedModeBanner: false,
             themeMode: themeVm.themeMode,
             theme: _buildTheme(),

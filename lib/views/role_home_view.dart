@@ -11,6 +11,8 @@ import 'admin_views.dart';
 import 'dosen_views.dart';
 import 'login_view.dart';
 import 'mahasiswa_views.dart';
+import 'pimpinan_views.dart';
+import 'presensi_views.dart';
 
 class RoleHomeView extends StatefulWidget {
   const RoleHomeView({super.key});
@@ -30,7 +32,7 @@ class _RoleHomeViewState extends State<RoleHomeView> {
     if (user == null) return const LoginView();
 
     // Role menentukan menu navigasi dan halaman yang boleh diakses.
-    final config = _RoleNavConfig.fromRole(user.role);
+    final config = _RoleNavConfig.fromUser(user);
     final pageBuilders = config.pageBuilders(user, _logout, (index) {
       _selectIndex(index);
     });
@@ -641,7 +643,7 @@ class ProfileView extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Text(user.role.label),
+                  Text(user.tingkatPimpinan?.label ?? user.role.label),
                 ],
               ),
             ),
@@ -678,10 +680,10 @@ class _RoleNavConfig {
   )
   pageBuilders;
 
-  factory _RoleNavConfig.fromRole(Role role) {
+  factory _RoleNavConfig.fromUser(User currentUser) {
     // Inilah pusat routing multi-role:
     // setiap role mendapatkan daftar tab dan halaman yang berbeda.
-    switch (role) {
+    switch (currentUser.role) {
       case Role.adminUniversitas:
         return _RoleNavConfig(
           destinations: _adminDestinations,
@@ -724,6 +726,7 @@ class _RoleNavConfig {
           pageBuilders: (user, logout, selectTab) => [
             () => AdminProdiDashboard(user: user),
             () => MahasiswaManagementView(prodiId: user.scopeId),
+            () => StatusMahasiswaManagementView(prodiId: user.scopeId),
             () => DosenManagementView(prodiId: user.scopeId),
             () => MataKuliahManagementView(prodiId: user.scopeId),
             () => const RuanganManagementView(),
@@ -752,6 +755,50 @@ class _RoleNavConfig {
             () => DosenProfileView(user: user, onLogout: logout),
           ],
         );
+      case Role.pimpinan:
+        if (currentUser.tingkatPimpinan == TingkatPimpinan.korpro) {
+          return _RoleNavConfig(
+            destinations: _korproDestinations,
+            pageBuilders: (user, logout, selectTab) => [
+              () => KorproDashboardView(user: user),
+              () => KorproJadwalView(user: user),
+              () => ProfileView(user: user, onLogout: logout),
+            ],
+          );
+        }
+        if (currentUser.tingkatPimpinan == TingkatPimpinan.dekan) {
+          return _RoleNavConfig(
+            destinations: _dekanDestinations,
+            pageBuilders: (user, logout, selectTab) => [
+              () => DekanDashboardView(
+                user: user,
+                onOpenKrs: () => selectTab(2),
+                onOpenPresensiMahasiswa: () => selectTab(3),
+                onOpenPresensiDosen: () => selectTab(3),
+                onOpenKelas: () => selectTab(1),
+                onOpenLaporan: () => selectTab(4),
+              ),
+              () => PimpinanDataView(user: user),
+              () => PimpinanKrsView(user: user),
+              () => PimpinanPresensiView(user: user),
+              () => PimpinanLaporanView(user: user),
+              () => ProfileView(user: user, onLogout: logout),
+            ],
+          );
+        }
+        return _RoleNavConfig(
+          destinations: _pimpinanDestinations,
+          pageBuilders: (user, logout, selectTab) => [
+            () => PimpinanDashboardView(
+              user: user,
+              onOpenPresensi: () => selectTab(3),
+            ),
+            () => PimpinanDataView(user: user),
+            () => PimpinanKrsView(user: user),
+            () => PimpinanPresensiView(user: user),
+            () => ProfileView(user: user, onLogout: logout),
+          ],
+        );
       case Role.mahasiswa:
         return _RoleNavConfig(
           destinations: _mahasiswaDestinations,
@@ -767,6 +814,7 @@ class _RoleNavConfig {
             () => MahasiswaJadwalView(mahasiswaId: user.scopeId),
             () => MahasiswaNilaiView(mahasiswaId: user.scopeId),
             () => MahasiswaKegiatanView(mahasiswaId: user.scopeId),
+            () => MahasiswaPresensiView(mahasiswaId: user.scopeId),
             () => MahasiswaProfileView(user: user, onLogout: logout),
           ],
         );
@@ -801,6 +849,10 @@ const _adminDestinations = [
 const _adminProdiDestinations = [
   NavigationDestination(icon: Icon(Icons.dashboard_outlined), label: 'Home'),
   NavigationDestination(icon: Icon(Icons.groups_outlined), label: 'Mahasiswa'),
+  NavigationDestination(
+    icon: Icon(Icons.manage_accounts_outlined),
+    label: 'Status',
+  ),
   NavigationDestination(icon: Icon(Icons.co_present_outlined), label: 'Dosen'),
   NavigationDestination(
     icon: Icon(Icons.menu_book_outlined),
@@ -834,5 +886,50 @@ const _mahasiswaDestinations = [
   ),
   NavigationDestination(icon: Icon(Icons.bar_chart_outlined), label: 'Nilai'),
   NavigationDestination(icon: Icon(Icons.work_outline), label: 'Kegiatan'),
+  NavigationDestination(
+    icon: Icon(Icons.how_to_reg_outlined),
+    label: 'Presensi',
+  ),
+  NavigationDestination(icon: Icon(Icons.person_outline), label: 'Profil'),
+];
+
+const _pimpinanDestinations = [
+  NavigationDestination(
+    icon: Icon(Icons.dashboard_outlined),
+    label: 'Dashboard',
+  ),
+  NavigationDestination(icon: Icon(Icons.storage_outlined), label: 'Data'),
+  NavigationDestination(icon: Icon(Icons.fact_check_outlined), label: 'KRS'),
+  NavigationDestination(
+    icon: Icon(Icons.monitor_heart_outlined),
+    label: 'Presensi',
+  ),
+  NavigationDestination(icon: Icon(Icons.person_outline), label: 'Profil'),
+];
+
+const _korproDestinations = [
+  NavigationDestination(
+    icon: Icon(Icons.dashboard_outlined),
+    label: 'Dashboard Prodi',
+  ),
+  NavigationDestination(
+    icon: Icon(Icons.calendar_month_outlined),
+    label: 'Jadwal Kuliah',
+  ),
+  NavigationDestination(icon: Icon(Icons.person_outline), label: 'Profil'),
+];
+
+const _dekanDestinations = [
+  NavigationDestination(
+    icon: Icon(Icons.dashboard_outlined),
+    label: 'Dashboard Fakultas',
+  ),
+  NavigationDestination(icon: Icon(Icons.class_outlined), label: 'Kelas'),
+  NavigationDestination(icon: Icon(Icons.fact_check_outlined), label: 'KRS'),
+  NavigationDestination(
+    icon: Icon(Icons.monitor_heart_outlined),
+    label: 'Presensi',
+  ),
+  NavigationDestination(icon: Icon(Icons.summarize_outlined), label: 'Laporan'),
   NavigationDestination(icon: Icon(Icons.person_outline), label: 'Profil'),
 ];

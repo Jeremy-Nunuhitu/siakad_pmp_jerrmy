@@ -82,4 +82,20 @@ class MahasiswaViewModel extends BaseListViewModel {
   void delete(String nim) {
     runAction(() => _service.deleteMahasiswa(nim));
   }
+
+  void ubahStatus({
+    required String nim,
+    required StatusMahasiswa statusBaru,
+    required String namaBukti,
+    required List<int> buktiBytes,
+  }) {
+    runAction(
+      () => _service.ubahStatusMahasiswa(
+        nim: nim,
+        statusBaru: statusBaru,
+        namaBukti: namaBukti,
+        buktiBytes: buktiBytes,
+      ),
+    );
+  }
 }

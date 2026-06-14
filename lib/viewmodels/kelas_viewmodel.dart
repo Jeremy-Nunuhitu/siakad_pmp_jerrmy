@@ -31,7 +31,7 @@ class KelasViewModel extends BaseListViewModel {
 
   void open({
     required String mataKuliahId,
-    required String dosenId,
+    required List<String> dosenIds,
     required int kapasitas,
     required String hari,
     required String jam,
@@ -41,7 +41,7 @@ class KelasViewModel extends BaseListViewModel {
     runAction(
       () => _service.openKelas(
         mataKuliahId: mataKuliahId,
-        dosenId: dosenId,
+        dosenIds: dosenIds,
         kapasitas: kapasitas,
         hari: hari,
         jam: jam,
@@ -53,7 +53,7 @@ class KelasViewModel extends BaseListViewModel {
   void update({
     required String id,
     required String mataKuliahId,
-    required String dosenId,
+    required List<String> dosenIds,
     required int kapasitas,
     required String hari,
     required String jam,
@@ -64,7 +64,7 @@ class KelasViewModel extends BaseListViewModel {
       () => _service.updateKelas(
         id: id,
         mataKuliahId: mataKuliahId,
-        dosenId: dosenId,
+        dosenIds: dosenIds,
         kapasitas: kapasitas,
         hari: hari,
         jam: jam,

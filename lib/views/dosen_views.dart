@@ -833,7 +833,10 @@ class DosenKelasView extends StatelessWidget {
                   Navigator.of(context).push(
                     PageRouteBuilder(
                       pageBuilder: (context, animation, secondaryAnimation) =>
-                          KelasPertemuanView(kelasId: item.id),
+                          KelasPertemuanView(
+                            kelasId: item.id,
+                            dosenId: dosenId,
+                          ),
                       transitionsBuilder:
                           (context, animation, secondaryAnimation, child) {
                             final slide =
@@ -1848,9 +1851,14 @@ class DosenTugasBox extends StatelessWidget {
 }
 
 class KelasPertemuanView extends StatefulWidget {
-  const KelasPertemuanView({required this.kelasId, super.key});
+  const KelasPertemuanView({
+    required this.kelasId,
+    required this.dosenId,
+    super.key,
+  });
 
   final String kelasId;
+  final String dosenId;
 
   @override
   State<KelasPertemuanView> createState() => _KelasPertemuanViewState();
@@ -2024,6 +2032,30 @@ class _KelasPertemuanViewState extends State<KelasPertemuanView> {
                                   _showMulaiDialog(context, service, p),
                             )
                           else ...[
+                            FilledButton.tonalIcon(
+                              icon: const Icon(Icons.person_pin_outlined),
+                              label: Text(
+                                service.presensiDosen.any(
+                                      (item) =>
+                                          item.pertemuanId == p.id &&
+                                          item.dosenId == widget.dosenId,
+                                    )
+                                    ? 'Dosen Sudah Presensi'
+                                    : 'Presensi Dosen',
+                              ),
+                              onPressed:
+                                  service.presensiDosen.any(
+                                    (item) =>
+                                        item.pertemuanId == p.id &&
+                                        item.dosenId == widget.dosenId,
+                                  )
+                                  ? null
+                                  : () => _showPresensiDosenDialog(
+                                      context,
+                                      service,
+                                      p,
+                                    ),
+                            ),
                             FilledButton.icon(
                               icon: const Icon(Icons.fact_check_outlined),
                               label: const Text('Isi Presensi'),
@@ -2082,7 +2114,11 @@ class _KelasPertemuanViewState extends State<KelasPertemuanView> {
             FilledButton(
               onPressed: () {
                 try {
-                  service.mulaiPertemuan(p.id, materiCtrl.text);
+                  service.mulaiPertemuan(
+                    p.id,
+                    materiCtrl.text,
+                    dosenId: widget.dosenId,
+                  );
                   Navigator.pop(context);
                   if (mounted) setState(() {});
                   showAppMessage(context, 'Pertemuan ${p.pertemuanKe} dimulai');
@@ -2104,7 +2140,7 @@ class _KelasPertemuanViewState extends State<KelasPertemuanView> {
     Pertemuan p,
   ) {
     try {
-      service.selesaikanPertemuan(p.id);
+      service.selesaikanPertemuan(p.id, dosenId: widget.dosenId);
       if (mounted) setState(() {});
       showAppMessage(context, 'Pertemuan ${p.pertemuanKe} selesai');
     } catch (e) {
@@ -2117,7 +2153,9 @@ class _KelasPertemuanViewState extends State<KelasPertemuanView> {
     MockService service,
     Pertemuan p,
   ) async {
-    final krsList = service.krs.where((k) => k.kelasId == p.kelasId).toList();
+    final krsList = service.krs
+        .where((k) => k.kelasId == p.kelasId && k.isValidated)
+        .toList();
     final currentPresensi = service.presensi
         .where((pr) => pr.pertemuanId == p.id)
         .toList();
@@ -2208,7 +2246,7 @@ class _KelasPertemuanViewState extends State<KelasPertemuanView> {
             FilledButton(
               onPressed: () {
                 try {
-                  service.simpanPresensi(p.id, status);
+                  service.simpanPresensi(p.id, status, dosenId: widget.dosenId);
                   Navigator.pop(context);
                   if (mounted) setState(() {});
                   showAppMessage(
@@ -2225,5 +2263,72 @@ class _KelasPertemuanViewState extends State<KelasPertemuanView> {
         );
       },
     );
+  }
+
+  Future<void> _showPresensiDosenDialog(
+    BuildContext context,
+    MockService service,
+    Pertemuan pertemuan,
+  ) async {
+    var status = 'Hadir';
+    final catatanController = TextEditingController();
+    await showDialog<void>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('Presensi Dosen Pertemuan ${pertemuan.pertemuanKe}'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                initialValue: status,
+                decoration: const InputDecoration(labelText: 'Status'),
+                items: const [
+                  DropdownMenuItem(value: 'Hadir', child: Text('Hadir')),
+                  DropdownMenuItem(value: 'Izin', child: Text('Izin')),
+                  DropdownMenuItem(value: 'Sakit', child: Text('Sakit')),
+                  DropdownMenuItem(value: 'Alfa', child: Text('Alfa')),
+                ],
+                onChanged: (value) {
+                  if (value != null) setDialogState(() => status = value);
+                },
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: catatanController,
+                decoration: const InputDecoration(
+                  labelText: 'Catatan (opsional)',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Batal'),
+            ),
+            FilledButton(
+              onPressed: () {
+                try {
+                  final message = service.isiPresensiDosen(
+                    pertemuanId: pertemuan.id,
+                    dosenId: widget.dosenId,
+                    status: status,
+                    catatan: catatanController.text,
+                  );
+                  Navigator.pop(context);
+                  if (mounted) setState(() {});
+                  showAppMessage(context, message);
+                } catch (error) {
+                  showAppMessage(context, error.toString());
+                }
+              },
+              child: const Text('Simpan'),
+            ),
+          ],
+        ),
+      ),
+    );
+    catatanController.dispose();
   }
 }
