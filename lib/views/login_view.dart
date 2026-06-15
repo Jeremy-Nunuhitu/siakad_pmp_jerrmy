@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
 import '../models/siakad_models.dart';
 import '../services/mock_service.dart';
 import '../utils/app_assets.dart';
@@ -239,7 +238,7 @@ class _BrandPanel extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             Text(
-              'SIAKAD Jeremy',
+              'SIAKAD Jeremy Nunuhitu',
               style: textTheme.displaySmall?.copyWith(
                 fontWeight: FontWeight.w900,
                 letterSpacing: 0,

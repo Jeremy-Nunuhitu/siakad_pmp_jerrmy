@@ -1645,38 +1645,55 @@ class PimpinanPresensiView extends StatefulWidget {
 }
 
 class _PimpinanPresensiViewState extends State<PimpinanPresensiView> {
-  String? status;
+  String? selectedFakultasId;
 
   @override
   Widget build(BuildContext context) {
     final service = context.watch<MockService>();
     final allowedProdiIds = _allowedProdiIds(service, widget.user);
-    final mataKuliahIds = service.mataKuliah
-        .where((item) => allowedProdiIds.contains(item.prodiId))
-        .map((item) => item.kode)
-        .toSet();
-    final kelasIds = service.kelas
-        .where((item) => mataKuliahIds.contains(item.mataKuliahId))
-        .map((item) => item.id)
-        .toSet();
-    final pertemuanIds = service.pertemuan
-        .where((item) => kelasIds.contains(item.kelasId))
-        .map((item) => item.id)
-        .toSet();
-    final mahasiswa = service.presensi
-        .where(
-          (item) =>
-              pertemuanIds.contains(item.pertemuanId) &&
-              (status == null || _sameStatus(item.statusKehadiran, status!)),
-        )
-        .toList();
-    final dosen = service.presensiDosen
-        .where(
-          (item) =>
-              pertemuanIds.contains(item.pertemuanId) &&
-              (status == null || _sameStatus(item.statusKehadiran, status!)),
-        )
-        .toList();
+    final fakultas = service.fakultas.where((item) {
+      return service.prodi.any(
+        (prodi) =>
+            prodi.fakultasId == item.id && allowedProdiIds.contains(prodi.id),
+      );
+    }).toList();
+    Fakultas? selectedFakultas;
+    for (final item in fakultas) {
+      if (item.id == selectedFakultasId) selectedFakultas = item;
+    }
+    final metrics = selectedFakultas == null
+        ? fakultas.map((item) {
+            final prodiIds = service.prodi
+                .where(
+                  (prodi) =>
+                      prodi.fakultasId == item.id &&
+                      allowedProdiIds.contains(prodi.id),
+                )
+                .map((prodi) => prodi.id)
+                .toSet();
+            return _presensiChartMetric(
+              service: service,
+              id: item.id,
+              nama: item.nama,
+              prodiIds: prodiIds,
+            );
+          }).toList()
+        : service.prodi
+              .where(
+                (item) =>
+                    item.fakultasId == selectedFakultas!.id &&
+                    allowedProdiIds.contains(item.id),
+              )
+              .map(
+                (item) => _presensiChartMetric(
+                  service: service,
+                  id: item.id,
+                  nama: item.nama,
+                  prodiIds: {item.id},
+                ),
+              )
+              .toList();
+
     return AppScaffold(
       title: 'Monitoring Presensi',
       child: Column(
@@ -1684,68 +1701,491 @@ class _PimpinanPresensiViewState extends State<PimpinanPresensiView> {
         children: [
           const _ReadOnlyNotice(),
           const SizedBox(height: 12),
-          _Filter<String>(
-            label: 'Status Presensi',
-            value: status,
-            items: const [
-              DropdownMenuItem(value: 'Hadir', child: Text('Hadir')),
-              DropdownMenuItem(value: 'Izin', child: Text('Izin')),
-              DropdownMenuItem(value: 'Sakit', child: Text('Sakit')),
-              DropdownMenuItem(value: 'Alfa', child: Text('Alfa')),
-            ],
-            onChanged: (value) => setState(() => status = value),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: _PresensiChartHeader(
+                title: selectedFakultas == null
+                    ? 'Presensi per Fakultas'
+                    : 'Presensi Prodi - ${selectedFakultas.nama}',
+                description: selectedFakultas == null
+                    ? 'Klik grafik fakultas untuk melihat rincian setiap program studi.'
+                    : 'Arahkan pointer ke kolom untuk melihat detail data presensi.',
+                showBack: selectedFakultas != null,
+                onBack: () => setState(() => selectedFakultasId = null),
+              ),
+            ),
           ),
           const SizedBox(height: 16),
-          _DataSection(
-            title: 'Rekap Presensi Mahasiswa',
-            children: mahasiswa.map((item) {
-              final pertemuan = service.pertemuan.firstWhere(
-                (p) => p.id == item.pertemuanId,
-              );
-              final kelas = service.kelas.firstWhere(
-                (k) => k.id == pertemuan.kelasId,
-              );
-              return ListTile(
-                leading: Icon(
-                  Icons.circle,
-                  size: 14,
-                  color: _statusColor(item.statusKehadiran),
-                ),
-                title: Text(service.getMahasiswaName(item.mahasiswaId)),
-                subtitle: Text(
-                  '${service.getMataKuliahName(kelas.mataKuliahId)} - Pertemuan ${pertemuan.pertemuanKe}',
-                ),
-                trailing: Text(item.statusKehadiran),
-              );
-            }).toList(),
-          ),
-          _DataSection(
-            title: 'Rekap Presensi Dosen',
-            children: dosen.map((item) {
-              final pertemuan = service.pertemuan.firstWhere(
-                (p) => p.id == item.pertemuanId,
-              );
-              final kelas = service.kelas.firstWhere(
-                (k) => k.id == pertemuan.kelasId,
-              );
-              return ListTile(
-                leading: Icon(
-                  Icons.circle,
-                  size: 14,
-                  color: _statusColor(item.statusKehadiran),
-                ),
-                title: Text(service.getDosenName(item.dosenId)),
-                subtitle: Text(
-                  '${service.getMataKuliahName(kelas.mataKuliahId)} - Pertemuan ${pertemuan.pertemuanKe}',
-                ),
-                trailing: Text(item.statusKehadiran),
-              );
-            }).toList(),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 420),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) => FadeTransition(
+              opacity: animation,
+              child: SlideTransition(
+                position:
+                    Tween<Offset>(
+                      begin: const Offset(0.04, 0),
+                      end: Offset.zero,
+                    ).animate(animation),
+                child: child,
+              ),
+            ),
+            child: _PresensiSmallMultipleGrid(
+              key: ValueKey(selectedFakultas?.id ?? 'fakultas'),
+              metrics: metrics,
+              showDrillDown: selectedFakultas == null,
+              onSelected: (metric) {
+                if (selectedFakultas != null) return;
+                setState(() => selectedFakultasId = metric.id);
+              },
+            ),
           ),
         ],
       ),
     );
   }
+}
+
+const _presensiStatuses = ['Hadir', 'Izin', 'Sakit', 'Alfa'];
+const _presensiMahasiswaColor = Color(0xFF0B57D0);
+const _presensiDosenColor = Color(0xFFFFA000);
+
+class _PresensiChartMetric {
+  const _PresensiChartMetric({
+    required this.id,
+    required this.nama,
+    required this.prodiCount,
+    required this.mahasiswa,
+    required this.dosen,
+  });
+
+  final String id;
+  final String nama;
+  final int prodiCount;
+  final Map<String, int> mahasiswa;
+  final Map<String, int> dosen;
+
+  int get totalMahasiswa =>
+      mahasiswa.values.fold(0, (total, value) => total + value);
+  int get totalDosen => dosen.values.fold(0, (total, value) => total + value);
+}
+
+_PresensiChartMetric _presensiChartMetric({
+  required MockService service,
+  required String id,
+  required String nama,
+  required Set<String> prodiIds,
+}) {
+  final mataKuliahProdi = {
+    for (final item in service.mataKuliah) item.kode: item.prodiId,
+  };
+  final kelasProdi = <String, String>{};
+  for (final item in service.kelas) {
+    final prodiId = mataKuliahProdi[item.mataKuliahId];
+    if (prodiId != null && prodiIds.contains(prodiId)) {
+      kelasProdi[item.id] = prodiId;
+    }
+  }
+  final pertemuanIds = service.pertemuan
+      .where((item) => kelasProdi.containsKey(item.kelasId))
+      .map((item) => item.id)
+      .toSet();
+  final mahasiswa = {for (final status in _presensiStatuses) status: 0};
+  final dosen = {for (final status in _presensiStatuses) status: 0};
+
+  for (final item in service.presensi) {
+    if (!pertemuanIds.contains(item.pertemuanId)) continue;
+    final status = _normalizedPresensiStatus(item.statusKehadiran);
+    if (status != null) mahasiswa[status] = mahasiswa[status]! + 1;
+  }
+  for (final item in service.presensiDosen) {
+    if (!pertemuanIds.contains(item.pertemuanId)) continue;
+    final status = _normalizedPresensiStatus(item.statusKehadiran);
+    if (status != null) dosen[status] = dosen[status]! + 1;
+  }
+
+  return _PresensiChartMetric(
+    id: id,
+    nama: nama,
+    prodiCount: prodiIds.length,
+    mahasiswa: mahasiswa,
+    dosen: dosen,
+  );
+}
+
+String? _normalizedPresensiStatus(String status) {
+  if (status == 'Hadir') return 'Hadir';
+  if (status == 'Izin' || status == 'Ijin') return 'Izin';
+  if (status == 'Sakit') return 'Sakit';
+  if (status == 'Alfa' || status == 'Alpa') return 'Alfa';
+  return null;
+}
+
+class _PresensiSmallMultipleGrid extends StatelessWidget {
+  const _PresensiSmallMultipleGrid({
+    required this.metrics,
+    required this.showDrillDown,
+    required this.onSelected,
+    super.key,
+  });
+
+  final List<_PresensiChartMetric> metrics;
+  final bool showDrillDown;
+  final ValueChanged<_PresensiChartMetric> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    if (metrics.isEmpty) {
+      return const Card(
+        child: ListTile(
+          leading: Icon(Icons.bar_chart_rounded),
+          title: Text('Belum ada data presensi'),
+        ),
+      );
+    }
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 1100
+            ? 3
+            : constraints.maxWidth >= 650
+            ? 2
+            : 1;
+        final width =
+            (constraints.maxWidth - ((columns - 1) * 14)) / columns;
+        return Wrap(
+          spacing: 14,
+          runSpacing: 14,
+          children: [
+            for (final metric in metrics)
+              SizedBox(
+                width: width,
+                child: _PresensiSmallMultipleChart(
+                  metric: metric,
+                  showDrillDown: showDrillDown,
+                  onTap: () => onSelected(metric),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _PresensiSmallMultipleChart extends StatelessWidget {
+  const _PresensiSmallMultipleChart({
+    required this.metric,
+    required this.showDrillDown,
+    required this.onTap,
+  });
+
+  final _PresensiChartMetric metric;
+  final bool showDrillDown;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final maxValue = [
+      ...metric.mahasiswa.values,
+      ...metric.dosen.values,
+    ].fold<int>(1, (current, value) => value > current ? value : current);
+
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: showDrillDown ? onTap : null,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          metric.nama,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          showDrillDown
+                              ? '${metric.prodiCount} prodi - ${metric.totalMahasiswa + metric.totalDosen} data'
+                              : '${metric.totalMahasiswa + metric.totalDosen} data presensi',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (showDrillDown)
+                    Icon(Icons.open_in_new_rounded, color: scheme.primary),
+                ],
+              ),
+              const SizedBox(height: 18),
+              SizedBox(
+                height: 210,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final status in _presensiStatuses)
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 3),
+                          child: Column(
+                            children: [
+                              Expanded(
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Expanded(
+                                      child: _AnimatedPresensiBar(
+                                        label: 'Mahasiswa',
+                                        status: status,
+                                        unitName: metric.nama,
+                                        value: metric.mahasiswa[status]!,
+                                        total: metric.totalMahasiswa,
+                                        maxValue: maxValue,
+                                        color: _presensiMahasiswaColor,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 3),
+                                    Expanded(
+                                      child: _AnimatedPresensiBar(
+                                        label: 'Dosen',
+                                        status: status,
+                                        unitName: metric.nama,
+                                        value: metric.dosen[status]!,
+                                        total: metric.totalDosen,
+                                        maxValue: maxValue,
+                                        color: _presensiDosenColor,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                status,
+                                maxLines: 1,
+                                overflow: TextOverflow.fade,
+                                style: Theme.of(context).textTheme.labelSmall,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AnimatedPresensiBar extends StatefulWidget {
+  const _AnimatedPresensiBar({
+    required this.label,
+    required this.status,
+    required this.unitName,
+    required this.value,
+    required this.total,
+    required this.maxValue,
+    required this.color,
+  });
+
+  final String label;
+  final String status;
+  final String unitName;
+  final int value;
+  final int total;
+  final int maxValue;
+  final Color color;
+
+  @override
+  State<_AnimatedPresensiBar> createState() => _AnimatedPresensiBarState();
+}
+
+class _AnimatedPresensiBarState extends State<_AnimatedPresensiBar> {
+  bool hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final percentage = widget.total == 0
+        ? 0
+        : widget.value / widget.total * 100;
+    return Tooltip(
+      waitDuration: const Duration(milliseconds: 180),
+      message:
+          '${widget.unitName}\n'
+          '${widget.label} - ${widget.status}\n'
+          '${widget.value} data (${percentage.toStringAsFixed(1)}%)',
+      child: MouseRegion(
+        cursor: SystemMouseCursors.basic,
+        onEnter: (_) => setState(() => hovered = true),
+        onExit: (_) => setState(() => hovered = false),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final target = widget.value / widget.maxValue;
+            return TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: target),
+              duration: const Duration(milliseconds: 650),
+              curve: Curves.easeOutCubic,
+              builder: (context, value, child) => Align(
+                alignment: Alignment.bottomCenter,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  height: value == 0
+                      ? 4
+                      : (constraints.maxHeight * value).clamp(
+                          4,
+                          constraints.maxHeight,
+                        ),
+                  decoration: BoxDecoration(
+                    color: hovered
+                        ? widget.color
+                        : widget.color.withValues(alpha: 0.78),
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(5),
+                    ),
+                    boxShadow: hovered
+                        ? [
+                            BoxShadow(
+                              color: widget.color.withValues(alpha: 0.30),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ]
+                        : null,
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _PresensiChartHeader extends StatelessWidget {
+  const _PresensiChartHeader({
+    required this.title,
+    required this.description,
+    required this.showBack,
+    required this.onBack,
+  });
+
+  final String title;
+  final String description;
+  final bool showBack;
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    final heading = Row(
+      children: [
+        if (showBack) ...[
+          IconButton.filledTonal(
+            onPressed: onBack,
+            icon: const Icon(Icons.arrow_back_rounded),
+            tooltip: 'Kembali ke fakultas',
+          ),
+          const SizedBox(width: 12),
+        ],
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              Text(description, style: Theme.of(context).textTheme.bodySmall),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 600) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              heading,
+              const SizedBox(height: 12),
+              const _PresensiChartLegend(),
+            ],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(child: heading),
+            const SizedBox(width: 16),
+            const _PresensiChartLegend(),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _PresensiChartLegend extends StatelessWidget {
+  const _PresensiChartLegend();
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 12,
+      runSpacing: 6,
+      children: const [
+        _PresensiLegendItem(
+          label: 'Mahasiswa',
+          color: _presensiMahasiswaColor,
+        ),
+        _PresensiLegendItem(label: 'Dosen', color: _presensiDosenColor),
+      ],
+    );
+  }
+}
+
+class _PresensiLegendItem extends StatelessWidget {
+  const _PresensiLegendItem({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Container(
+        width: 10,
+        height: 10,
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(3),
+        ),
+      ),
+      const SizedBox(width: 5),
+      Text(label, style: Theme.of(context).textTheme.labelMedium),
+    ],
+  );
 }
 
 class PimpinanLaporanView extends StatelessWidget {
@@ -1886,26 +2326,6 @@ class _ReadOnlyNotice extends StatelessWidget {
       subtitle: const Text(
         'Pimpinan hanya dapat melihat data tanpa mengubahnya.',
       ),
-    ),
-  );
-}
-
-class _DataSection extends StatelessWidget {
-  const _DataSection({required this.title, required this.children});
-
-  final String title;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) => Card(
-    margin: const EdgeInsets.only(bottom: 14),
-    child: ExpansionTile(
-      key: PageStorageKey<String>('pimpinan-data-section-$title'),
-      initiallyExpanded: true,
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-      children: children.isEmpty
-          ? const [ListTile(title: Text('Belum ada data'))]
-          : children,
     ),
   );
 }
@@ -2096,13 +2516,6 @@ bool _sameStatus(String value, String expected) {
   if (expected == 'Izin') return value == 'Izin' || value == 'Ijin';
   if (expected == 'Alfa') return value == 'Alfa' || value == 'Alpa';
   return value == expected;
-}
-
-Color _statusColor(String status) {
-  if (status == 'Hadir') return Colors.green;
-  if (status == 'Izin' || status == 'Ijin') return Colors.amber;
-  if (status == 'Sakit') return Colors.blue;
-  return Colors.red;
 }
 
 class _DekanCharts extends StatelessWidget {
