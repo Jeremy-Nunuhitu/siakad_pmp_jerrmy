@@ -737,7 +737,10 @@ class _RoleNavConfig {
             destinations: _korproDestinations,
             pageBuilders: (user, logout, selectTab) => [
               () => KorproDashboardView(user: user),
+              () => KorproMahasiswaView(user: user),
+              () => KorproDosenView(user: user),
               () => KorproJadwalView(user: user),
+              () => KorproPresensiOverviewView(user: user),
               () => ProfileView(user: user, onLogout: logout),
             ],
           );
@@ -907,9 +910,15 @@ const _korproDestinations = [
     icon: Icon(Icons.dashboard_outlined),
     label: 'Dashboard Prodi',
   ),
+  NavigationDestination(icon: Icon(Icons.groups_outlined), label: 'Mahasiswa'),
+  NavigationDestination(icon: Icon(Icons.co_present_outlined), label: 'Dosen'),
   NavigationDestination(
     icon: Icon(Icons.calendar_month_outlined),
     label: 'Jadwal Kuliah',
+  ),
+  NavigationDestination(
+    icon: Icon(Icons.insights_outlined),
+    label: 'Overview Presensi',
   ),
   NavigationDestination(icon: Icon(Icons.person_outline), label: 'Profil'),
 ];
