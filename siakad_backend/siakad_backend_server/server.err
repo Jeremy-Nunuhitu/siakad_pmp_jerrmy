@@ -1,0 +1,152 @@
+WARNING: CPU and memory usage metrics are not supported on Windows.
+2026-06-20 11:04:55.320948Z  647445413 ERROR          n/a                      DatabaseQueryException: { message: null value in column "nilai_tugas" of relation "nilai" violates not-null constraint, code: 23502, detail: Failing row contains (n-history-01, 2406080046, k-01, 78, B+, 1, null, null, null, null, null, null, null, null, ta-2024-ganjil, {"id": "n-history-01", "kelasId": "k-01", "semester": 1, "nilaiA...)., table: nilai, column: nilai_tugas }
+2026-06-20 11:04:55.320948Z  647445413 STACK TRACE    n/a                      package:postgres/src/v3/connection.dart 955                                    _PgResultStreamSubscription.handleError
+package:postgres/src/v3/connection.dart 533                                    PgConnectionImplementation._handleMessage
+dart:async/zone_root.dart 48                                                   _rootRunUnary
+dart:async/zone.dart 733                                                       _CustomZone.runUnary
+dart:async/zone.dart 633                                                       _CustomZone.runUnaryGuarded
+dart:async/stream_impl.dart 381                                                _BufferingStreamSubscription._sendData
+dart:async/stream_impl.dart 312                                                _BufferingStreamSubscription._add
+dart:async/stream_controller.dart 798                                          _SyncStreamControllerDispatch._sendData
+dart:async/stream_controller.dart 663                                          _StreamController._add
+dart:async/stream_controller.dart 618                                          _StreamController.add
+dart:async/stream.dart 823                                                     Stream.asyncMap.<fn>.add
+dart:async/zone_root.dart 48                                                   _rootRunUnary
+dart:async/zone.dart 733                                                       _CustomZone.runUnary
+dart:async/stream_impl.dart 215                                                _BufferingStreamSubscription.resume
+===== asynchronous gap ===========================
+package:postgres/src/v3/connection.dart 743                                    _PreparedStatement.run
+package:postgres/src/v3/connection.dart 185                                    _PgSessionBase.execute
+package:postgres/src/pool/pool_impl.dart 153                                   PoolImplementation.withConnection
+package:serverpod/src/database/adapters/postgres/database_connection.dart 570  PostgresDatabaseConnection._query
+package:serverpod/src/database/adapters/postgres/database_connection.dart 631  PostgresDatabaseConnection.execute
+package:siakad_backend_server/src/siakad/siakad_state_endpoint.dart 485        SiakadStateEndpoint._insertRows
+package:siakad_backend_server/src/siakad/siakad_state_endpoint.dart 401        SiakadStateEndpoint._syncRelationalTables
+package:siakad_backend_server/src/siakad/siakad_state_endpoint.dart 39         SiakadStateEndpoint.saveState
+package:serverpod/src/server/server.dart 509                                   Server._handleEndpointCall
+package:serverpod/src/server/server.dart 376                                   Server._endpoints
+package:serverpod/src/server/server.dart 207                                   Server._reportException.<fn>
+package:serverpod/src/server/server.dart 351                                   Server._headers.<fn>
+package:relic_core/src/middleware/routing_middleware.dart 135                  _RoutingMiddlewareBuilder.call.<fn>
+package:relic_core/src/relic_server.dart 156                                   _RelicServer._wrapHandlerWithMiddleware.<fn>
+package:relic_core/src/relic_server.dart 132                                   _RelicServer._handleRequest
+===== asynchronous gap ===========================
+package:postgres/src/v3/connection.dart 202                                    _PgSessionBase._prepare
+package:postgres/src/v3/connection.dart 183                                    _PgSessionBase.execute
+package:postgres/src/pool/pool_impl.dart 309                                   _PoolConnection.execute
+package:postgres/src/pool/pool_impl.dart 64                                    PoolImplementation.execute.<fn>
+package:postgres/src/pool/pool_impl.dart 153                                   PoolImplementation.withConnection
+package:serverpod/src/database/adapters/postgres/database_connection.dart 570  PostgresDatabaseConnection._query
+package:serverpod/src/database/adapters/postgres/database_connection.dart 631  PostgresDatabaseConnection.execute
+package:siakad_backend_server/src/siakad/siakad_state_endpoint.dart 485        SiakadStateEndpoint._insertRows
+package:siakad_backend_server/src/siakad/siakad_state_endpoint.dart 401        SiakadStateEndpoint._syncRelationalTables
+package:siakad_backend_server/src/siakad/siakad_state_endpoint.dart 39         SiakadStateEndpoint.saveState
+package:serverpod/src/server/server.dart 509                                   Server._handleEndpointCall
+package:serverpod/src/server/server.dart 376                                   Server._endpoints
+package:serverpod/src/server/server.dart 207                                   Server._reportException.<fn>
+package:serverpod/src/server/server.dart 351                                   Server._headers.<fn>
+package:relic_core/src/middleware/routing_middleware.dart 135                  _RoutingMiddlewareBuilder.call.<fn>
+package:relic_core/src/relic_server.dart 156                                   _RelicServer._wrapHandlerWithMiddleware.<fn>
+package:relic_core/src/relic_server.dart 132                                   _RelicServer._handleRequest
+
+2026-06-20 11:04:55.324945Z  647445413 ERROR          n/a                      DatabaseQueryException: { message: null value in column "nilai_tugas" of relation "nilai" violates not-null constraint, code: 23502, detail: Failing row contains (n-history-01, 2406080046, k-01, 78, B+, 1, null, null, null, null, null, null, null, null, ta-2024-ganjil, {"id": "n-history-01", "kelasId": "k-01", "semester": 1, "nilaiA...)., table: nilai, column: nilai_tugas }
+2026-06-20 11:04:55.324945Z  647445413 STACK TRACE    n/a                      package:postgres/src/v3/connection.dart 955                                    _PgResultStreamSubscription.handleError
+package:postgres/src/v3/connection.dart 533                                    PgConnectionImplementation._handleMessage
+dart:async/zone_root.dart 48                                                   _rootRunUnary
+dart:async/zone.dart 733                                                       _CustomZone.runUnary
+dart:async/zone.dart 633                                                       _CustomZone.runUnaryGuarded
+dart:async/stream_impl.dart 381                                                _BufferingStreamSubscription._sendData
+dart:async/stream_impl.dart 312                                                _BufferingStreamSubscription._add
+dart:async/stream_controller.dart 798                                          _SyncStreamControllerDispatch._sendData
+dart:async/stream_controller.dart 663                                          _StreamController._add
+dart:async/stream_controller.dart 618                                          _StreamController.add
+dart:async/stream.dart 823                                                     Stream.asyncMap.<fn>.add
+dart:async/zone_root.dart 48                                                   _rootRunUnary
+dart:async/zone.dart 733                                                       _CustomZone.runUnary
+dart:async/stream_impl.dart 215                                                _BufferingStreamSubscription.resume
+===== asynchronous gap ===========================
+package:postgres/src/v3/connection.dart 743                                    _PreparedStatement.run
+package:postgres/src/v3/connection.dart 185                                    _PgSessionBase.execute
+package:postgres/src/pool/pool_impl.dart 153                                   PoolImplementation.withConnection
+package:serverpod/src/database/adapters/postgres/database_connection.dart 570  PostgresDatabaseConnection._query
+package:serverpod/src/database/adapters/postgres/database_connection.dart 631  PostgresDatabaseConnection.execute
+package:siakad_backend_server/src/siakad/siakad_state_endpoint.dart 485        SiakadStateEndpoint._insertRows
+package:siakad_backend_server/src/siakad/siakad_state_endpoint.dart 401        SiakadStateEndpoint._syncRelationalTables
+package:siakad_backend_server/src/siakad/siakad_state_endpoint.dart 39         SiakadStateEndpoint.saveState
+package:serverpod/src/server/server.dart 509                                   Server._handleEndpointCall
+package:serverpod/src/server/server.dart 376                                   Server._endpoints
+package:serverpod/src/server/server.dart 207                                   Server._reportException.<fn>
+package:serverpod/src/server/server.dart 351                                   Server._headers.<fn>
+package:relic_core/src/middleware/routing_middleware.dart 135                  _RoutingMiddlewareBuilder.call.<fn>
+package:relic_core/src/relic_server.dart 156                                   _RelicServer._wrapHandlerWithMiddleware.<fn>
+package:relic_core/src/relic_server.dart 132                                   _RelicServer._handleRequest
+===== asynchronous gap ===========================
+package:postgres/src/v3/connection.dart 202                                    _PgSessionBase._prepare
+package:postgres/src/v3/connection.dart 183                                    _PgSessionBase.execute
+package:postgres/src/pool/pool_impl.dart 309                                   _PoolConnection.execute
+package:postgres/src/pool/pool_impl.dart 64                                    PoolImplementation.execute.<fn>
+package:postgres/src/pool/pool_impl.dart 153                                   PoolImplementation.withConnection
+package:serverpod/src/database/adapters/postgres/database_connection.dart 570  PostgresDatabaseConnection._query
+package:serverpod/src/database/adapters/postgres/database_connection.dart 631  PostgresDatabaseConnection.execute
+package:siakad_backend_server/src/siakad/siakad_state_endpoint.dart 485        SiakadStateEndpoint._insertRows
+package:siakad_backend_server/src/siakad/siakad_state_endpoint.dart 401        SiakadStateEndpoint._syncRelationalTables
+package:siakad_backend_server/src/siakad/siakad_state_endpoint.dart 39         SiakadStateEndpoint.saveState
+package:serverpod/src/server/server.dart 509                                   Server._handleEndpointCall
+package:serverpod/src/server/server.dart 376                                   Server._endpoints
+package:serverpod/src/server/server.dart 207                                   Server._reportException.<fn>
+package:serverpod/src/server/server.dart 351                                   Server._headers.<fn>
+package:relic_core/src/middleware/routing_middleware.dart 135                  _RoutingMiddlewareBuilder.call.<fn>
+package:relic_core/src/relic_server.dart 156                                   _RelicServer._wrapHandlerWithMiddleware.<fn>
+package:relic_core/src/relic_server.dart 132                                   _RelicServer._handleRequest
+
+2026-06-20 11:04:58.305598Z ERROR: Internal server error. Request handler failed with exception.
+2026-06-20 11:04:58.305598Z ERROR: DatabaseQueryException: { message: null value in column "nilai_tugas" of relation "nilai" violates not-null constraint, code: 23502, detail: Failing row contains (n-history-01, 2406080046, k-01, 78, B+, 1, null, null, null, null, null, null, null, null, ta-2024-ganjil, {"id": "n-history-01", "kelasId": "k-01", "semester": 1, "nilaiA...)., table: nilai, column: nilai_tugas }
+package:postgres/src/v3/connection.dart 955                                    _PgResultStreamSubscription.handleError
+package:postgres/src/v3/connection.dart 533                                    PgConnectionImplementation._handleMessage
+dart:async/zone_root.dart 48                                                   _rootRunUnary
+dart:async/zone.dart 733                                                       _CustomZone.runUnary
+dart:async/zone.dart 633                                                       _CustomZone.runUnaryGuarded
+dart:async/stream_impl.dart 381                                                _BufferingStreamSubscription._sendData
+dart:async/stream_impl.dart 312                                                _BufferingStreamSubscription._add
+dart:async/stream_controller.dart 798                                          _SyncStreamControllerDispatch._sendData
+dart:async/stream_controller.dart 663                                          _StreamController._add
+dart:async/stream_controller.dart 618                                          _StreamController.add
+dart:async/stream.dart 823                                                     Stream.asyncMap.<fn>.add
+dart:async/zone_root.dart 48                                                   _rootRunUnary
+dart:async/zone.dart 733                                                       _CustomZone.runUnary
+dart:async/stream_impl.dart 215                                                _BufferingStreamSubscription.resume
+===== asynchronous gap ===========================
+package:postgres/src/v3/connection.dart 743                                    _PreparedStatement.run
+package:postgres/src/v3/connection.dart 185                                    _PgSessionBase.execute
+package:postgres/src/pool/pool_impl.dart 153                                   PoolImplementation.withConnection
+package:serverpod/src/database/adapters/postgres/database_connection.dart 570  PostgresDatabaseConnection._query
+package:serverpod/src/database/adapters/postgres/database_connection.dart 631  PostgresDatabaseConnection.execute
+package:siakad_backend_server/src/siakad/siakad_state_endpoint.dart 485        SiakadStateEndpoint._insertRows
+package:siakad_backend_server/src/siakad/siakad_state_endpoint.dart 401        SiakadStateEndpoint._syncRelationalTables
+package:siakad_backend_server/src/siakad/siakad_state_endpoint.dart 39         SiakadStateEndpoint.saveState
+package:serverpod/src/server/server.dart 509                                   Server._handleEndpointCall
+package:serverpod/src/server/server.dart 376                                   Server._endpoints
+package:serverpod/src/server/server.dart 207                                   Server._reportException.<fn>
+package:serverpod/src/server/server.dart 351                                   Server._headers.<fn>
+package:relic_core/src/middleware/routing_middleware.dart 135                  _RoutingMiddlewareBuilder.call.<fn>
+package:relic_core/src/relic_server.dart 156                                   _RelicServer._wrapHandlerWithMiddleware.<fn>
+package:relic_core/src/relic_server.dart 132                                   _RelicServer._handleRequest
+===== asynchronous gap ===========================
+package:postgres/src/v3/connection.dart 202                                    _PgSessionBase._prepare
+package:postgres/src/v3/connection.dart 183                                    _PgSessionBase.execute
+package:postgres/src/pool/pool_impl.dart 309                                   _PoolConnection.execute
+package:postgres/src/pool/pool_impl.dart 64                                    PoolImplementation.execute.<fn>
+package:postgres/src/pool/pool_impl.dart 153                                   PoolImplementation.withConnection
+package:serverpod/src/database/adapters/postgres/database_connection.dart 570  PostgresDatabaseConnection._query
+package:serverpod/src/database/adapters/postgres/database_connection.dart 631  PostgresDatabaseConnection.execute
+package:siakad_backend_server/src/siakad/siakad_state_endpoint.dart 485        SiakadStateEndpoint._insertRows
+package:siakad_backend_server/src/siakad/siakad_state_endpoint.dart 401        SiakadStateEndpoint._syncRelationalTables
+package:siakad_backend_server/src/siakad/siakad_state_endpoint.dart 39         SiakadStateEndpoint.saveState
+package:serverpod/src/server/server.dart 509                                   Server._handleEndpointCall
+package:serverpod/src/server/server.dart 376                                   Server._endpoints
+package:serverpod/src/server/server.dart 207                                   Server._reportException.<fn>
+package:serverpod/src/server/server.dart 351                                   Server._headers.<fn>
+package:relic_core/src/middleware/routing_middleware.dart 135                  _RoutingMiddlewareBuilder.call.<fn>
+package:relic_core/src/relic_server.dart 156                                   _RelicServer._wrapHandlerWithMiddleware.<fn>
+package:relic_core/src/relic_server.dart 132                                   _RelicServer._handleRequest
+

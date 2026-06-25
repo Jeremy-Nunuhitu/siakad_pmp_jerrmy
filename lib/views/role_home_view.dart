@@ -398,6 +398,973 @@ class RoleDashboard extends StatelessWidget {
   }
 }
 
+class _AdminUniversitasHome extends StatefulWidget {
+  const _AdminUniversitasHome({required this.user, required this.selectTab});
+
+  final User user;
+  final ValueChanged<int> selectTab;
+
+  @override
+  State<_AdminUniversitasHome> createState() => _AdminUniversitasHomeState();
+}
+
+class _AdminUniversitasHomeState extends State<_AdminUniversitasHome> {
+  int? _revision;
+  _AdminUniversitySnapshot? _snapshot;
+
+  @override
+  Widget build(BuildContext context) {
+    final service = context.watch<MockService>();
+    final themeVm = context.watch<ThemeViewModel>();
+    final snapshot = _snapshotFor(service);
+    final scheme = Theme.of(context).colorScheme;
+
+    return AppScaffold(
+      title: 'Dashboard',
+      actions: [
+        IconButton(
+          onPressed: () => themeVm.toggleTheme(),
+          icon: Icon(
+            themeVm.isDarkMode
+                ? Icons.light_mode_outlined
+                : Icons.dark_mode_outlined,
+          ),
+          tooltip: 'Toggle Theme',
+        ),
+      ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _AdminHeroCard(
+            user: widget.user,
+            snapshot: snapshot,
+            onPrimaryTap: () => widget.selectTab(2),
+            onSecondaryTap: () => widget.selectTab(3),
+          ),
+          const SizedBox(height: 16),
+          _AdminKpiGrid(snapshot: snapshot),
+          const SizedBox(height: 16),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final twoColumns = constraints.maxWidth >= 920;
+              final children = [
+                _AdminPanel(
+                  title: 'Sebaran Fakultas',
+                  icon: Icons.account_balance_outlined,
+                  child: Column(
+                    children: [
+                      for (final faculty in snapshot.facultyLoads)
+                        _FacultyLoadRow(
+                          name: faculty.name,
+                          prodiCount: faculty.prodiCount,
+                          studentCount: faculty.studentCount,
+                          maxStudentCount: snapshot.maxFacultyStudents,
+                        ),
+                    ],
+                  ),
+                ),
+                _AdminPanel(
+                  title: 'Status KRS',
+                  icon: Icons.fact_check_outlined,
+                  child: Column(
+                    children: [
+                      _ProgressMetricRow(
+                        label: 'Disetujui',
+                        value: snapshot.krsApproved,
+                        total: snapshot.totalKrs,
+                        color: Colors.green,
+                      ),
+                      _ProgressMetricRow(
+                        label: 'Diajukan',
+                        value: snapshot.krsSubmitted,
+                        total: snapshot.totalKrs,
+                        color: scheme.primary,
+                      ),
+                      _ProgressMetricRow(
+                        label: 'Draft',
+                        value: snapshot.krsDraft,
+                        total: snapshot.totalKrs,
+                        color: Colors.orange,
+                      ),
+                      _ProgressMetricRow(
+                        label: 'Ditolak',
+                        value: snapshot.krsRejected,
+                        total: snapshot.totalKrs,
+                        color: Colors.red,
+                      ),
+                    ],
+                  ),
+                ),
+              ];
+
+              if (!twoColumns) {
+                return Column(
+                  children: [
+                    children[0],
+                    const SizedBox(height: 12),
+                    children[1],
+                  ],
+                );
+              }
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: children[0]),
+                  const SizedBox(width: 12),
+                  Expanded(child: children[1]),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final twoColumns = constraints.maxWidth >= 920;
+              final children = [
+                _AdminPanel(
+                  title: 'Sinyal Operasional',
+                  icon: Icons.monitor_heart_outlined,
+                  child: Column(
+                    children: [
+                      _OperationalSignal(
+                        icon: Icons.how_to_reg_outlined,
+                        title: 'Presensi mahasiswa',
+                        value: '${snapshot.attendanceRateText} hadir',
+                        tone: Colors.green,
+                      ),
+                      _OperationalSignal(
+                        icon: Icons.event_available_outlined,
+                        title: 'Fase KRS',
+                        value: snapshot.krsPhaseText,
+                        tone: snapshot.krsPhaseActive
+                            ? Colors.green
+                            : Colors.orange,
+                      ),
+                      _OperationalSignal(
+                        icon: Icons.groups_2_outlined,
+                        title: 'Kelas penuh',
+                        value: '${snapshot.fullClassCount} kelas',
+                        tone: snapshot.fullClassCount == 0
+                            ? Colors.green
+                            : Colors.red,
+                      ),
+                      _OperationalSignal(
+                        icon: Icons.person_search_outlined,
+                        title: 'Mahasiswa belum KRS',
+                        value: '${snapshot.studentsWithoutKrs} orang',
+                        tone: snapshot.studentsWithoutKrs == 0
+                            ? Colors.green
+                            : Colors.orange,
+                      ),
+                    ],
+                  ),
+                ),
+                _AdminPanel(
+                  title: 'Aksi Cepat',
+                  icon: Icons.bolt_outlined,
+                  child: Column(
+                    children: [
+                      _AdminQuickAction(
+                        icon: Icons.account_tree_outlined,
+                        title: 'Struktur Fakultas',
+                        subtitle:
+                            '${snapshot.totalFakultas} fakultas dan '
+                            '${snapshot.totalProdi} prodi',
+                        onTap: () => widget.selectTab(1),
+                      ),
+                      _AdminQuickAction(
+                        icon: Icons.storage_outlined,
+                        title: 'Data Akademik Global',
+                        subtitle:
+                            '${_formatNumber(snapshot.totalMahasiswa)} '
+                            'mahasiswa, ${_formatNumber(snapshot.totalDosen)} dosen',
+                        onTap: () => widget.selectTab(2),
+                      ),
+                      _AdminQuickAction(
+                        icon: Icons.manage_accounts_outlined,
+                        title: 'Akun dan Role',
+                        subtitle: '${snapshot.totalUsers} akun pengguna aktif',
+                        onTap: () => widget.selectTab(3),
+                      ),
+                    ],
+                  ),
+                ),
+              ];
+
+              if (!twoColumns) {
+                return Column(
+                  children: [
+                    children[0],
+                    const SizedBox(height: 12),
+                    children[1],
+                  ],
+                );
+              }
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: children[0]),
+                  const SizedBox(width: 12),
+                  Expanded(child: children[1]),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  _AdminUniversitySnapshot _snapshotFor(MockService service) {
+    if (_revision == service.dataRevision && _snapshot != null) {
+      return _snapshot!;
+    }
+    _revision = service.dataRevision;
+    _snapshot = _AdminUniversitySnapshot.from(service);
+    return _snapshot!;
+  }
+}
+
+class _AdminHeroCard extends StatelessWidget {
+  const _AdminHeroCard({
+    required this.user,
+    required this.snapshot,
+    required this.onPrimaryTap,
+    required this.onSecondaryTap,
+  });
+
+  final User user;
+  final _AdminUniversitySnapshot snapshot;
+  final VoidCallback onPrimaryTap;
+  final VoidCallback onSecondaryTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              scheme.primary,
+              Color.lerp(scheme.primary, scheme.secondary, 0.42)!,
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+        ),
+        padding: const EdgeInsets.all(20),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final wide = constraints.maxWidth >= 760;
+            final identity = Row(
+              children: [
+                CircleAvatar(
+                  radius: 28,
+                  backgroundColor: scheme.onPrimary.withValues(alpha: 0.16),
+                  child: Text(
+                    user.name.substring(0, 1),
+                    style: TextStyle(
+                      color: scheme.onPrimary,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Command Center Universitas',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          color: scheme.onPrimary,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${user.name} - ${snapshot.activeAcademicYear}',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: scheme.onPrimary.withValues(alpha: 0.82),
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+            final actions = Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              alignment: wide ? WrapAlignment.end : WrapAlignment.start,
+              children: [
+                FilledButton.icon(
+                  onPressed: onPrimaryTap,
+                  icon: const Icon(Icons.storage_outlined),
+                  label: const Text('Data Global'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: scheme.onPrimary,
+                    foregroundColor: scheme.primary,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+                OutlinedButton.icon(
+                  onPressed: onSecondaryTap,
+                  icon: const Icon(Icons.group_outlined),
+                  label: const Text('Kelola User'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: scheme.onPrimary,
+                    side: BorderSide(
+                      color: scheme.onPrimary.withValues(alpha: 0.55),
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ],
+            );
+
+            if (!wide) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [identity, const SizedBox(height: 16), actions],
+              );
+            }
+
+            return Row(
+              children: [
+                Expanded(child: identity),
+                const SizedBox(width: 16),
+                actions,
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _AdminKpiGrid extends StatelessWidget {
+  const _AdminKpiGrid({required this.snapshot});
+
+  final _AdminUniversitySnapshot snapshot;
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final columns = width >= 1100 ? 4 : (width >= 640 ? 2 : 1);
+
+    return GridView.count(
+      crossAxisCount: columns,
+      crossAxisSpacing: 12,
+      mainAxisSpacing: 12,
+      childAspectRatio: width >= 640 ? 2.55 : 3.4,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      children: [
+        _AdminKpiCard(
+          icon: Icons.school_outlined,
+          label: 'Mahasiswa Aktif',
+          value: _formatNumber(snapshot.activeMahasiswa),
+          caption: '${snapshot.activeStudentRateText} dari total mahasiswa',
+        ),
+        _AdminKpiCard(
+          icon: Icons.badge_outlined,
+          label: 'Dosen',
+          value: _formatNumber(snapshot.totalDosen),
+          caption: '${snapshot.totalProdi} prodi terlayani',
+        ),
+        _AdminKpiCard(
+          icon: Icons.class_outlined,
+          label: 'Kelas Dibuka',
+          value: _formatNumber(snapshot.totalKelas),
+          caption: '${snapshot.fullClassCount} kelas penuh',
+        ),
+        _AdminKpiCard(
+          icon: Icons.fact_check_outlined,
+          label: 'KRS Disetujui',
+          value: snapshot.krsApprovedRateText,
+          caption: '${_formatNumber(snapshot.krsApproved)} record tervalidasi',
+        ),
+      ],
+    );
+  }
+}
+
+class _AdminKpiCard extends StatelessWidget {
+  const _AdminKpiCard({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.caption,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final String caption;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: scheme.primary.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, color: scheme.primary),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    caption,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: scheme.onSurface.withValues(alpha: 0.58),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AdminPanel extends StatelessWidget {
+  const _AdminPanel({
+    required this.title,
+    required this.icon,
+    required this.child,
+  });
+
+  final String title;
+  final IconData icon;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, color: scheme.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            child,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FacultyLoadRow extends StatelessWidget {
+  const _FacultyLoadRow({
+    required this.name,
+    required this.prodiCount,
+    required this.studentCount,
+    required this.maxStudentCount,
+  });
+
+  final String name;
+  final int prodiCount;
+  final int studentCount;
+  final int maxStudentCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final progress = maxStudentCount == 0
+        ? 0.0
+        : studentCount / maxStudentCount;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                '${_formatNumber(studentCount)} mhs',
+                style: TextStyle(
+                  color: scheme.onSurface.withValues(alpha: 0.64),
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          _MiniProgressBar(value: progress, color: scheme.primary),
+          const SizedBox(height: 4),
+          Text(
+            '$prodiCount prodi',
+            style: TextStyle(
+              color: scheme.onSurface.withValues(alpha: 0.58),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProgressMetricRow extends StatelessWidget {
+  const _ProgressMetricRow({
+    required this.label,
+    required this.value,
+    required this.total,
+    required this.color,
+  });
+
+  final String label;
+  final int value;
+  final int total;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final progress = total == 0 ? 0.0 : value / total;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+              Text(
+                '${_formatNumber(value)} (${_formatPercent(progress)})',
+                style: TextStyle(
+                  color: scheme.onSurface.withValues(alpha: 0.64),
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          _MiniProgressBar(value: progress, color: color),
+        ],
+      ),
+    );
+  }
+}
+
+class _MiniProgressBar extends StatelessWidget {
+  const _MiniProgressBar({required this.value, required this.color});
+
+  final double value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(999),
+      child: LinearProgressIndicator(
+        minHeight: 8,
+        value: value.clamp(0.0, 1.0),
+        color: color,
+        backgroundColor: scheme.surfaceContainerHighest,
+      ),
+    );
+  }
+}
+
+class _OperationalSignal extends StatelessWidget {
+  const _OperationalSignal({
+    required this.icon,
+    required this.title,
+    required this.value,
+    required this.tone,
+  });
+
+  final IconData icon;
+  final String title;
+  final String value;
+  final Color tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: tone.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: tone, size: 20),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Flexible(
+            child: Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.end,
+              style: TextStyle(
+                color: scheme.onSurface.withValues(alpha: 0.68),
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AdminQuickAction extends StatelessWidget {
+  const _AdminQuickAction({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Ink(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: scheme.outlineVariant),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: scheme.primary),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: scheme.onSurface.withValues(alpha: 0.58),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(Icons.chevron_right_rounded),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AdminUniversitySnapshot {
+  const _AdminUniversitySnapshot({
+    required this.totalFakultas,
+    required this.totalProdi,
+    required this.totalMahasiswa,
+    required this.activeMahasiswa,
+    required this.totalDosen,
+    required this.totalKelas,
+    required this.totalUsers,
+    required this.totalKrs,
+    required this.krsDraft,
+    required this.krsSubmitted,
+    required this.krsApproved,
+    required this.krsRejected,
+    required this.fullClassCount,
+    required this.studentsWithoutKrs,
+    required this.attendanceRate,
+    required this.activeAcademicYear,
+    required this.krsPhaseText,
+    required this.krsPhaseActive,
+    required this.facultyLoads,
+  });
+
+  final int totalFakultas;
+  final int totalProdi;
+  final int totalMahasiswa;
+  final int activeMahasiswa;
+  final int totalDosen;
+  final int totalKelas;
+  final int totalUsers;
+  final int totalKrs;
+  final int krsDraft;
+  final int krsSubmitted;
+  final int krsApproved;
+  final int krsRejected;
+  final int fullClassCount;
+  final int studentsWithoutKrs;
+  final double attendanceRate;
+  final String activeAcademicYear;
+  final String krsPhaseText;
+  final bool krsPhaseActive;
+  final List<_FacultyLoad> facultyLoads;
+
+  int get maxFacultyStudents {
+    var max = 0;
+    for (final item in facultyLoads) {
+      if (item.studentCount > max) max = item.studentCount;
+    }
+    return max;
+  }
+
+  String get activeStudentRateText => _formatPercent(
+    totalMahasiswa == 0 ? 0 : activeMahasiswa / totalMahasiswa,
+  );
+
+  String get krsApprovedRateText =>
+      _formatPercent(totalKrs == 0 ? 0 : krsApproved / totalKrs);
+
+  String get attendanceRateText => _formatPercent(attendanceRate);
+
+  factory _AdminUniversitySnapshot.from(MockService service) {
+    final prodiToFakultas = <String, String>{};
+    final prodiCountByFakultas = <String, int>{
+      for (final fakultas in service.fakultas) fakultas.id: 0,
+    };
+    final mahasiswaCountByFakultas = <String, int>{
+      for (final fakultas in service.fakultas) fakultas.id: 0,
+    };
+
+    for (final prodi in service.prodi) {
+      prodiToFakultas[prodi.id] = prodi.fakultasId;
+      prodiCountByFakultas[prodi.fakultasId] =
+          (prodiCountByFakultas[prodi.fakultasId] ?? 0) + 1;
+    }
+
+    var activeMahasiswa = 0;
+    for (final mahasiswa in service.mahasiswa) {
+      if (mahasiswa.status == StatusMahasiswa.aktif) activeMahasiswa++;
+      final fakultasId = prodiToFakultas[mahasiswa.prodiId];
+      if (fakultasId != null) {
+        mahasiswaCountByFakultas[fakultasId] =
+            (mahasiswaCountByFakultas[fakultasId] ?? 0) + 1;
+      }
+    }
+
+    var krsDraft = 0;
+    var krsSubmitted = 0;
+    var krsApproved = 0;
+    var krsRejected = 0;
+    final studentsWithKrs = <String>{};
+    final participantCountByClass = <String, int>{};
+    for (final krs in service.krs) {
+      studentsWithKrs.add(krs.mahasiswaId);
+      participantCountByClass[krs.kelasId] =
+          (participantCountByClass[krs.kelasId] ?? 0) + 1;
+      switch (krs.status) {
+        case KrsStatus.draft:
+          krsDraft++;
+        case KrsStatus.diajukan:
+          krsSubmitted++;
+        case KrsStatus.disetujui:
+          krsApproved++;
+        case KrsStatus.ditolak:
+          krsRejected++;
+      }
+    }
+
+    var fullClassCount = 0;
+    for (final kelas in service.kelas) {
+      final participants = participantCountByClass[kelas.id] ?? 0;
+      if (participants >= kelas.kapasitas) fullClassCount++;
+    }
+
+    var attended = 0;
+    for (final presensi in service.presensi) {
+      if (presensi.statusKehadiran.toLowerCase() == 'hadir') attended++;
+    }
+
+    final now = DateTime.now();
+    final krsPhase = service.faseKrs
+        .where((fase) => fase.tahunAjaranId == service.tahunAjaranAktif.id)
+        .toList();
+    final activePhase = krsPhase.where((fase) => fase.berlangsungPada(now));
+    final krsPhaseText = activePhase.isNotEmpty
+        ? 'Berlangsung'
+        : (krsPhase.isEmpty ? 'Belum diatur' : krsPhase.first.statusPada(now));
+
+    final facultyLoads = [
+      for (final fakultas in service.fakultas)
+        _FacultyLoad(
+          name: fakultas.nama,
+          prodiCount: prodiCountByFakultas[fakultas.id] ?? 0,
+          studentCount: mahasiswaCountByFakultas[fakultas.id] ?? 0,
+        ),
+    ]..sort((a, b) => b.studentCount.compareTo(a.studentCount));
+
+    return _AdminUniversitySnapshot(
+      totalFakultas: service.fakultas.length,
+      totalProdi: service.prodi.length,
+      totalMahasiswa: service.mahasiswa.length,
+      activeMahasiswa: activeMahasiswa,
+      totalDosen: service.dosen.length,
+      totalKelas: service.kelas.length,
+      totalUsers: service.users.length,
+      totalKrs: service.krs.length,
+      krsDraft: krsDraft,
+      krsSubmitted: krsSubmitted,
+      krsApproved: krsApproved,
+      krsRejected: krsRejected,
+      fullClassCount: fullClassCount,
+      studentsWithoutKrs: service.mahasiswa.length - studentsWithKrs.length,
+      attendanceRate: service.presensi.isEmpty
+          ? 0
+          : attended / service.presensi.length,
+      activeAcademicYear: service.tahunAjaranAktif.label,
+      krsPhaseText: krsPhaseText,
+      krsPhaseActive: activePhase.isNotEmpty,
+      facultyLoads: facultyLoads,
+    );
+  }
+}
+
+class _FacultyLoad {
+  const _FacultyLoad({
+    required this.name,
+    required this.prodiCount,
+    required this.studentCount,
+  });
+
+  final String name;
+  final int prodiCount;
+  final int studentCount;
+}
+
+String _formatNumber(int value) {
+  final text = value.toString();
+  final buffer = StringBuffer();
+  for (var i = 0; i < text.length; i++) {
+    final remaining = text.length - i;
+    buffer.write(text[i]);
+    if (remaining > 1 && remaining % 3 == 1) buffer.write('.');
+  }
+  return buffer.toString();
+}
+
+String _formatPercent(num value) => '${(value * 100).round()}%';
+
 class AdminProdiDashboard extends StatelessWidget {
   const AdminProdiDashboard({required this.user, super.key});
 
@@ -664,14 +1631,7 @@ class _RoleNavConfig {
         return _RoleNavConfig(
           destinations: _adminDestinations,
           pageBuilders: (user, logout, selectTab) => [
-            () => RoleDashboard(
-              user: user,
-              flow: const [
-                'Admin mengelola data master dan akun pengguna',
-                'Operator Prodi mengelola data akademik prodi',
-              ],
-              actions: const [],
-            ),
+            () => _AdminUniversitasHome(user: user, selectTab: selectTab),
             () => const FakultasView(),
             () => const GlobalDataView(),
             () => UserManagementView(currentUser: user),

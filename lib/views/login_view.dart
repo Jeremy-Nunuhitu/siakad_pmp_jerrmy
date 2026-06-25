@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../models/siakad_models.dart';
 import '../services/mock_service.dart';
 import '../utils/app_assets.dart';
 import '../utils/app_helpers.dart';
@@ -585,22 +584,16 @@ class _TestingAccountsCard extends StatelessWidget {
             const SizedBox(height: 12),
             Consumer<MockService>(
               builder: (context, mock, child) {
-                final allAccounts = [
-                  ...mock.users.map(
-                    (u) => _AccountInfo(
-                      u.name,
-                      u.username,
-                      u.password,
-                      u.role.label,
-                    ),
-                  ),
-                  ...mock.dosen.map(
-                    (d) => _AccountInfo(d.nama, d.nidn, d.password, 'Dosen'),
-                  ),
-                  ...mock.mahasiswa.map(
-                    (m) => _AccountInfo(m.nama, m.nim, m.password, 'Mahasiswa'),
-                  ),
-                ];
+                final allAccounts = mock.demoAccounts
+                    .map(
+                      (account) => _AccountInfo(
+                        account.name,
+                        account.username,
+                        account.password,
+                        account.role,
+                      ),
+                    )
+                    .toList(growable: false);
 
                 return SizedBox(
                   height: 174,

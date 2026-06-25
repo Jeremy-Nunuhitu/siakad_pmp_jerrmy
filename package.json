@@ -1,8 +1,5 @@
 {
-  "dependencies": {
-    "sqlite": "^5.1.1",
-    "sqlite3": "^5.1.7"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@types/node": "^25.9.3"
   }

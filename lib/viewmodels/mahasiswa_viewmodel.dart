@@ -5,12 +5,15 @@ import 'base_list_viewmodel.dart';
 class MahasiswaViewModel extends BaseListViewModel {
   MahasiswaViewModel(this._service);
 
+  static const defaultWindowSize = 500;
+
   final MockService _service;
 
   List<Mahasiswa> items({String? prodiId}) {
     // Daftar mahasiswa bisa difilter per prodi sesuai scope operator.
     return _service.mahasiswa
         .where((item) => prodiId == null || item.prodiId == prodiId)
+        .take(prodiId == null ? defaultWindowSize : 1000)
         .toList();
   }
 

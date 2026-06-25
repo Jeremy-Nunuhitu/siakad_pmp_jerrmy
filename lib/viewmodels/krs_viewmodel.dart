@@ -5,12 +5,15 @@ import 'base_list_viewmodel.dart';
 class KRSViewModel extends BaseListViewModel {
   KRSViewModel(this._service);
 
+  static const defaultWindowSize = 1000;
+
   final MockService _service;
 
   List<KRS> items({String? mahasiswaId}) {
     // Mahasiswa hanya melihat KRS miliknya, sedangkan admin bisa membaca semua.
     return _service.krs
         .where((item) => mahasiswaId == null || item.mahasiswaId == mahasiswaId)
+        .take(mahasiswaId == null ? defaultWindowSize : 100)
         .toList();
   }
 

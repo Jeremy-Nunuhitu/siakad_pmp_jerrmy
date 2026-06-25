@@ -1,1 +1,8 @@
 include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    - siakad_backend/**
+    - node_modules/**
+    - tmp/**
+    - tool/generate_bulk_siakad_data.py

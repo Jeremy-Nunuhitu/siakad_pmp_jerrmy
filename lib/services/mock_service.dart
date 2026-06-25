@@ -3,42 +3,55 @@ import 'dart:collection';
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
-import 'package:sqflite_common/sqlite_api.dart';
+import 'package:siakad_backend_client/siakad_backend_client.dart';
 
 import '../models/siakad_models.dart';
-import 'mock_database.dart';
+
+class DemoAccount {
+  const DemoAccount({
+    required this.name,
+    required this.username,
+    required this.password,
+    required this.role,
+  });
+
+  final String name;
+  final String username;
+  final String password;
+  final String role;
+}
 
 class MockService {
-  MockService._(this._db);
+  MockService._(this._client);
 
-  static const _databaseName = 'siakad_jeremy.sqlite';
+  static const _apiUrl = String.fromEnvironment(
+    'SIAKAD_API_URL',
+    defaultValue: 'http://localhost:8080/',
+  );
   static const _seedAsset = 'assets/database/siakad_seed.json';
-  static const _stateTable = 'app_state';
 
-  final Database? _db;
+  final Client _client;
 
   static Future<MockService> create() async {
-    final db = await openMockDatabase(_databaseName);
-    final service = MockService._(db);
-    if (db == null) {
+    final service = MockService._(
+      Client(_apiUrl, connectionTimeout: const Duration(minutes: 2)),
+    );
+    final stateJson = await service._client.siakadState.getState();
+    if (stateJson == null || stateJson.isEmpty) {
       await service._loadSeedData();
       service._seedPertemuanDefaults();
-      return service;
-    }
-    await service._createSchema();
-    if (await service._hasSavedState()) {
-      await service._loadState();
-      await service._ensureFeatureDefaults();
-    } else {
-      await service._loadSeedData();
-      service._seedPertemuanDefaults();
+      service._rebuildIndexes();
       await service._saveAllAsync();
+    } else {
+      service._loadState(service._jsonMap(jsonDecode(stateJson)));
+      await service._ensureFeatureDefaults();
+      service._rebuildIndexes();
     }
     return service;
   }
 
-  // SQLite is the source of truth. The bundled seed is imported only when the
-  // database is empty; Web keeps the same data in memory because it has no DB.
+  // Serverpod/PostgreSQL is the source of truth. The bundled seed is imported
+  // only when the backend has no saved state yet.
   final List<User> _users = [];
   final List<Fakultas> _fakultas = [];
   final List<Prodi> _prodi = [];
@@ -61,6 +74,35 @@ class MockService {
   final List<Presensi> _presensi = [];
   final List<PresensiDosen> _presensiDosen = [];
   final List<FaseKrs> _faseKrs = [];
+
+  final Map<String, User> _usersByUsername = {};
+  final Map<String, Mahasiswa> _mahasiswaByNim = {};
+  final Map<String, Mahasiswa> _mahasiswaByName = {};
+  final Map<String, Dosen> _dosenByNidn = {};
+  final Map<String, Dosen> _dosenByName = {};
+  final Map<String, Fakultas> _fakultasById = {};
+  final Map<String, Prodi> _prodiById = {};
+  final Map<String, List<Prodi>> _prodiByFakultas = {};
+  final Map<String, List<Mahasiswa>> _mahasiswaByProdi = {};
+  final Map<String, List<Dosen>> _dosenByProdi = {};
+  final Map<String, List<MataKuliah>> _mataKuliahByProdi = {};
+  final Map<String, MataKuliah> _mataKuliahByKode = {};
+  final Map<String, Ruangan> _ruanganByKode = {};
+  final Map<String, Kelas> _kelasById = {};
+  final Map<String, List<Kelas>> _kelasByTahunAjaran = {};
+  final Map<String, List<DosenPengajar>> _dosenPengajarByKelas = {};
+  final Map<String, int> _jumlahPesertaByKelas = {};
+  final Map<String, int> _totalSksByDosen = {};
+  final Map<String, List<KRS>> _krsByMahasiswa = {};
+  final Map<String, List<KRS>> _krsByKelas = {};
+  final Map<String, List<Nilai>> _nilaiByMahasiswa = {};
+  final Map<String, List<Presensi>> _presensiByMahasiswa = {};
+  final Map<String, List<Pertemuan>> _pertemuanByKelas = {};
+  final Map<String, List<Presensi>> _presensiByPertemuan = {};
+  final Map<String, List<PresensiDosen>> _presensiDosenByPertemuan = {};
+  int _dataRevision = 0;
+
+  int get dataRevision => _dataRevision;
 
   // View read-only dibuat sekali agar build UI tidak terus membuat list baru.
   late final List<User> users = UnmodifiableListView(_users);
@@ -89,6 +131,156 @@ class MockService {
     _presensiDosen,
   );
   late final List<FaseKrs> faseKrs = UnmodifiableListView(_faseKrs);
+
+  void _rebuildIndexes() {
+    _usersByUsername
+      ..clear()
+      ..addEntries(_users.map((item) => MapEntry(item.username, item)));
+    _mahasiswaByNim
+      ..clear()
+      ..addEntries(_mahasiswa.map((item) => MapEntry(item.nim, item)));
+    _mahasiswaByName
+      ..clear()
+      ..addEntries(_mahasiswa.map((item) => MapEntry(item.nama, item)));
+    _dosenByNidn
+      ..clear()
+      ..addEntries(_dosen.map((item) => MapEntry(item.nidn, item)));
+    _dosenByName
+      ..clear()
+      ..addEntries(_dosen.map((item) => MapEntry(item.nama, item)));
+    _fakultasById
+      ..clear()
+      ..addEntries(_fakultas.map((item) => MapEntry(item.id, item)));
+    _prodiById
+      ..clear()
+      ..addEntries(_prodi.map((item) => MapEntry(item.id, item)));
+
+    _prodiByFakultas.clear();
+    for (final item in _prodi) {
+      (_prodiByFakultas[item.fakultasId] ??= []).add(item);
+    }
+
+    _mahasiswaByProdi.clear();
+    for (final item in _mahasiswa) {
+      (_mahasiswaByProdi[item.prodiId] ??= []).add(item);
+    }
+
+    _dosenByProdi.clear();
+    for (final item in _dosen) {
+      (_dosenByProdi[item.prodiId] ??= []).add(item);
+    }
+
+    _mataKuliahByProdi.clear();
+    for (final item in _mataKuliah) {
+      (_mataKuliahByProdi[item.prodiId] ??= []).add(item);
+    }
+
+    _mataKuliahByKode
+      ..clear()
+      ..addEntries(_mataKuliah.map((item) => MapEntry(item.kode, item)));
+    _ruanganByKode
+      ..clear()
+      ..addEntries(_ruangan.map((item) => MapEntry(item.kodeRuangan, item)));
+    _kelasById
+      ..clear()
+      ..addEntries(_kelas.map((item) => MapEntry(item.id, item)));
+
+    _kelasByTahunAjaran.clear();
+    for (final item in _kelas) {
+      (_kelasByTahunAjaran[item.tahunAjaranId] ??= []).add(item);
+    }
+
+    _dosenPengajarByKelas.clear();
+    for (final item in _dosenPengajar) {
+      (_dosenPengajarByKelas[item.idKelas] ??= []).add(item);
+    }
+
+    _jumlahPesertaByKelas.clear();
+    _krsByMahasiswa.clear();
+    _krsByKelas.clear();
+    for (final item in _krs) {
+      _jumlahPesertaByKelas[item.kelasId] =
+          (_jumlahPesertaByKelas[item.kelasId] ?? 0) + 1;
+      (_krsByMahasiswa[item.mahasiswaId] ??= []).add(item);
+      (_krsByKelas[item.kelasId] ??= []).add(item);
+    }
+
+    _nilaiByMahasiswa.clear();
+    for (final item in _nilai) {
+      (_nilaiByMahasiswa[item.mahasiswaId] ??= []).add(item);
+    }
+
+    _presensiByMahasiswa.clear();
+    _presensiByPertemuan.clear();
+    for (final item in _presensi) {
+      (_presensiByMahasiswa[item.mahasiswaId] ??= []).add(item);
+      (_presensiByPertemuan[item.pertemuanId] ??= []).add(item);
+    }
+
+    _presensiDosenByPertemuan.clear();
+    for (final item in _presensiDosen) {
+      (_presensiDosenByPertemuan[item.pertemuanId] ??= []).add(item);
+    }
+
+    _pertemuanByKelas.clear();
+    for (final item in _pertemuan) {
+      (_pertemuanByKelas[item.kelasId] ??= []).add(item);
+    }
+
+    _totalSksByDosen.clear();
+    for (final kelas in _kelas) {
+      final sks = _mataKuliahByKode[kelas.mataKuliahId]?.sks ?? 0;
+      for (final pengajar in getDosenPengajarKelas(kelas.id)) {
+        _totalSksByDosen[pengajar.nidnDosen] =
+            (_totalSksByDosen[pengajar.nidnDosen] ?? 0) + sks;
+      }
+    }
+    _dataRevision++;
+  }
+
+  List<DemoAccount> get demoAccounts {
+    final accounts = <DemoAccount>[];
+    void addUser(String username) {
+      final user = _usersByUsername[username];
+      if (user == null) return;
+      accounts.add(
+        DemoAccount(
+          name: user.name,
+          username: user.username,
+          password: user.password,
+          role: user.role.label,
+        ),
+      );
+    }
+
+    addUser('rektor@siakad.com');
+    addUser('univ');
+    addUser('admin-f-01');
+    addUser('operator-p-0101');
+    addUser('korpro-p-0101');
+
+    for (final dosen in _dosen.take(4)) {
+      accounts.add(
+        DemoAccount(
+          name: dosen.nama,
+          username: dosen.nidn,
+          password: dosen.password,
+          role: 'Dosen',
+        ),
+      );
+    }
+    for (final mahasiswa in _mahasiswa.take(6)) {
+      accounts.add(
+        DemoAccount(
+          name: mahasiswa.nama,
+          username: mahasiswa.nim,
+          password: mahasiswa.password,
+          role: 'Mahasiswa',
+        ),
+      );
+    }
+    return accounts;
+  }
 
   TahunAjaran get tahunAjaranAktif => _tahunAjaran.firstWhere(
     (item) => item.aktif,
@@ -176,6 +368,7 @@ class MockService {
   }
 
   Future<void> _ensureFeatureDefaults() async {
+    var changed = false;
     final seed = await _readSeedData();
     final pimpinanDefaults = _seedList(
       seed,
@@ -185,10 +378,12 @@ class MockService {
     for (final user in pimpinanDefaults) {
       if (!_users.any((item) => item.username == user.username)) {
         _users.add(user);
+        changed = true;
       }
     }
     if (_tahunAjaran.isEmpty) {
       _tahunAjaran.addAll(_seedList(seed, 'tahunAjaran', _tahunAjaranFromJson));
+      changed = true;
     }
     for (final kelas in _kelas) {
       for (var nomor = 1; nomor <= 16; nomor++) {
@@ -203,49 +398,46 @@ class MockService {
               status: StatusPertemuan.belumDimulai,
             ),
           );
+          changed = true;
         }
       }
     }
-    await _saveAllAsync();
+    if (changed) {
+      _rebuildIndexes();
+      await _saveAllAsync();
+    }
   }
 
   User? login(String username, String password) {
     final uname = username.trim();
 
-    // Alur login dicek berurutan: admin, mahasiswa, lalu dosen.
-    // Jika cocok, service mengembalikan User dengan role yang sesuai.
-    for (final user in _users) {
-      if (user.username == uname && user.password == password) {
-        return user;
-      }
+    final user = _usersByUsername[uname];
+    if (user != null && user.password == password) {
+      return user;
     }
 
-    // Mahasiswa login memakai NIM atau nama.
-    for (final m in _mahasiswa) {
-      if ((m.nim == uname || m.nama == uname) && m.password == password) {
-        return User(
-          id: 'u-m-${m.nim}',
-          username: m.nim,
-          password: m.password,
-          role: Role.mahasiswa,
-          name: m.nama,
-          scopeId: m.nim,
-        );
-      }
+    final m = _mahasiswaByNim[uname] ?? _mahasiswaByName[uname];
+    if (m != null && m.password == password) {
+      return User(
+        id: 'u-m-${m.nim}',
+        username: m.nim,
+        password: m.password,
+        role: Role.mahasiswa,
+        name: m.nama,
+        scopeId: m.nim,
+      );
     }
 
-    // Dosen login memakai NIDN atau nama.
-    for (final d in _dosen) {
-      if ((d.nidn == uname || d.nama == uname) && d.password == password) {
-        return User(
-          id: 'u-d-${d.nidn}',
-          username: d.nidn,
-          password: d.password,
-          role: Role.dosen,
-          name: d.nama,
-          scopeId: d.nidn,
-        );
-      }
+    final d = _dosenByNidn[uname] ?? _dosenByName[uname];
+    if (d != null && d.password == password) {
+      return User(
+        id: 'u-d-${d.nidn}',
+        username: d.nidn,
+        password: d.password,
+        role: Role.dosen,
+        name: d.nama,
+        scopeId: d.nidn,
+      );
     }
 
     return null;
@@ -1044,32 +1236,28 @@ class MockService {
   }
 
   String getMataKuliahName(String kode) {
-    return _mataKuliah.firstWhere((item) => item.kode == kode).nama;
+    return _mataKuliahByKode[kode]?.nama ?? kode;
   }
 
   String getDosenName(String nidn) {
-    return _dosen.firstWhere((item) => item.nidn == nidn).nama;
+    return _dosenByNidn[nidn]?.nama ?? nidn;
   }
 
   String getRuanganName(String kodeRuangan) {
-    final matches = _ruangan.where((item) => item.kodeRuangan == kodeRuangan);
-    if (matches.isEmpty) return kodeRuangan;
-    return matches.first.namaRuangan;
+    return _ruanganByKode[kodeRuangan]?.namaRuangan ?? kodeRuangan;
   }
 
   String getRuanganInfo(String kodeRuangan) {
-    final matches = _ruangan.where((item) => item.kodeRuangan == kodeRuangan);
-    if (matches.isEmpty) return kodeRuangan;
-    final item = matches.first;
+    final item = _ruanganByKode[kodeRuangan];
+    if (item == null) return kodeRuangan;
     return '${item.namaRuangan} (${item.kodeRuangan}) - ${item.lokasi}';
   }
 
   List<DosenPengajar> getDosenPengajarKelas(String kelasId) {
-    final pengajar = _dosenPengajar
-        .where((item) => item.idKelas == kelasId)
-        .toList();
+    final pengajar = _dosenPengajarByKelas[kelasId] ?? const [];
     if (pengajar.isNotEmpty) return pengajar;
-    final kelas = _kelas.firstWhere((item) => item.id == kelasId);
+    final kelas = _kelasById[kelasId];
+    if (kelas == null) return const [];
     return [
       DosenPengajar(
         id: 'fallback-${kelas.id}',
@@ -1094,54 +1282,146 @@ class MockService {
   }
 
   String getMahasiswaName(String nim) {
-    return _mahasiswa.firstWhere((item) => item.nim == nim).nama;
+    return _mahasiswaByNim[nim]?.nama ?? nim;
   }
 
   int getJumlahPesertaKelas(String kelasId) {
-    return _krs.where((item) => item.kelasId == kelasId).length;
+    return _jumlahPesertaByKelas[kelasId] ?? 0;
   }
 
   bool isKelasPenuh(String kelasId) {
-    final kelas = _kelas.firstWhere((item) => item.id == kelasId);
+    final kelas = _kelasById[kelasId];
+    if (kelas == null) return false;
     return getJumlahPesertaKelas(kelasId) >= kelas.kapasitas;
   }
 
   int getTotalSksDosen(String nidn) {
-    final kelasDosen = _kelas.where((k) => isDosenMengajarKelas(nidn, k.id));
-    int total = 0;
-    for (final k in kelasDosen) {
-      final mk = _mataKuliah.firstWhere((mk) => mk.kode == k.mataKuliahId);
-      total += mk.sks;
+    return _totalSksByDosen[nidn] ?? 0;
+  }
+
+  List<KRS> getKrsMahasiswa(String nim) {
+    return _krsByMahasiswa[nim] ?? const [];
+  }
+
+  List<KRS> getKrsKelas(String kelasId) {
+    return _krsByKelas[kelasId] ?? const [];
+  }
+
+  List<KRS> krsByKelasIds(Iterable<String> kelasIds) {
+    final result = <KRS>[];
+    for (final kelasId in kelasIds) {
+      result.addAll(getKrsKelas(kelasId));
     }
-    return total;
+    return UnmodifiableListView(result);
+  }
+
+  List<Nilai> getNilaiMahasiswa(String nim) {
+    return _nilaiByMahasiswa[nim] ?? const [];
+  }
+
+  List<Presensi> getPresensiMahasiswa(String nim) {
+    return _presensiByMahasiswa[nim] ?? const [];
+  }
+
+  List<Pertemuan> getPertemuanKelas(String kelasId) {
+    return _pertemuanByKelas[kelasId] ?? const [];
+  }
+
+  List<Presensi> getPresensiPertemuan(String pertemuanId) {
+    return _presensiByPertemuan[pertemuanId] ?? const [];
+  }
+
+  List<PresensiDosen> getPresensiDosenPertemuan(String pertemuanId) {
+    return _presensiDosenByPertemuan[pertemuanId] ?? const [];
+  }
+
+  List<Prodi> prodiByFakultasId(String fakultasId) {
+    return _prodiByFakultas[fakultasId] ?? const [];
+  }
+
+  List<Mahasiswa> mahasiswaByProdiId(String prodiId) {
+    return _mahasiswaByProdi[prodiId] ?? const [];
+  }
+
+  List<Mahasiswa> mahasiswaByProdiIds(Iterable<String> prodiIds) {
+    final result = <Mahasiswa>[];
+    for (final prodiId in prodiIds) {
+      result.addAll(mahasiswaByProdiId(prodiId));
+    }
+    return UnmodifiableListView(result);
+  }
+
+  List<Dosen> dosenByProdiId(String prodiId) {
+    return _dosenByProdi[prodiId] ?? const [];
+  }
+
+  List<Dosen> dosenByProdiIds(Iterable<String> prodiIds) {
+    final result = <Dosen>[];
+    for (final prodiId in prodiIds) {
+      result.addAll(dosenByProdiId(prodiId));
+    }
+    return UnmodifiableListView(result);
+  }
+
+  List<MataKuliah> mataKuliahByProdiId(String prodiId) {
+    return _mataKuliahByProdi[prodiId] ?? const [];
+  }
+
+  List<MataKuliah> mataKuliahByProdiIds(Iterable<String> prodiIds) {
+    final result = <MataKuliah>[];
+    for (final prodiId in prodiIds) {
+      result.addAll(mataKuliahByProdiId(prodiId));
+    }
+    return UnmodifiableListView(result);
+  }
+
+  List<Kelas> kelasByTahunAjaran(String tahunAjaranId) {
+    return _kelasByTahunAjaran[tahunAjaranId] ?? const [];
+  }
+
+  List<Pertemuan> pertemuanByKelasIds(Iterable<String> kelasIds) {
+    final result = <Pertemuan>[];
+    for (final kelasId in kelasIds) {
+      result.addAll(getPertemuanKelas(kelasId));
+    }
+    return UnmodifiableListView(result);
+  }
+
+  List<Presensi> presensiByPertemuanIds(Iterable<String> pertemuanIds) {
+    final result = <Presensi>[];
+    for (final pertemuanId in pertemuanIds) {
+      result.addAll(getPresensiPertemuan(pertemuanId));
+    }
+    return UnmodifiableListView(result);
+  }
+
+  List<PresensiDosen> presensiDosenByPertemuanIds(
+    Iterable<String> pertemuanIds,
+  ) {
+    final result = <PresensiDosen>[];
+    for (final pertemuanId in pertemuanIds) {
+      result.addAll(getPresensiDosenPertemuan(pertemuanId));
+    }
+    return UnmodifiableListView(result);
+  }
+
+  Kelas? getKelasById(String id) {
+    return _kelasById[id];
+  }
+
+  MataKuliah? getMataKuliahByKode(String kode) {
+    return _mataKuliahByKode[kode];
   }
 
   String getDosenFullInfo(String nidn) {
     try {
-      final d = _dosen.firstWhere((item) => item.nidn == nidn);
-      final p = _prodi.firstWhere((item) => item.id == d.prodiId);
-      final f = _fakultas.firstWhere((item) => item.id == p.fakultasId);
+      final d = _dosenByNidn[nidn]!;
+      final p = _prodiById[d.prodiId]!;
+      final f = _fakultasById[p.fakultasId]!;
       return '${p.nama}, ${f.nama}';
     } catch (_) {
       return '-';
     }
-  }
-
-  Future<void> _createSchema() {
-    return _db!.execute('''
-      CREATE TABLE IF NOT EXISTS $_stateTable (
-        key TEXT PRIMARY KEY,
-        value TEXT NOT NULL
-      )
-    ''');
-  }
-
-  Future<bool> _hasSavedState() async {
-    final result = await _db!.rawQuery(
-      'SELECT COUNT(*) AS total FROM $_stateTable WHERE key = ?',
-      ['users'],
-    );
-    return (result.first['total'] as int) > 0;
   }
 
   Future<Map<String, dynamic>> _readSeedData() async {
@@ -1209,176 +1489,127 @@ class MockService {
     return rows.map((row) => fromJson(_jsonMap(row))).toList();
   }
 
-  Future<void> _loadState() async {
+  void _loadState(Map<String, dynamic> state) {
     _users
       ..clear()
-      ..addAll(await _readList('users', _userFromJson));
+      ..addAll(_readList(state, 'users', _userFromJson));
     _fakultas
       ..clear()
-      ..addAll(await _readList('fakultas', _fakultasFromJson));
+      ..addAll(_readList(state, 'fakultas', _fakultasFromJson));
     _prodi
       ..clear()
-      ..addAll(await _readList('prodi', _prodiFromJson));
+      ..addAll(_readList(state, 'prodi', _prodiFromJson));
     _tahunAjaran
       ..clear()
-      ..addAll(await _readList('tahunAjaran', _tahunAjaranFromJson));
+      ..addAll(_readList(state, 'tahunAjaran', _tahunAjaranFromJson));
     _mahasiswa
       ..clear()
-      ..addAll(await _readList('mahasiswa', _mahasiswaFromJson));
+      ..addAll(_readList(state, 'mahasiswa', _mahasiswaFromJson));
     _riwayatStatusMahasiswa
       ..clear()
       ..addAll(
-        await _readList(
+        _readList(
+          state,
           'riwayatStatusMahasiswa',
           _riwayatStatusMahasiswaFromJson,
         ),
       );
     _dosen
       ..clear()
-      ..addAll(await _readList('dosen', _dosenFromJson));
+      ..addAll(_readList(state, 'dosen', _dosenFromJson));
     _mataKuliah
       ..clear()
-      ..addAll(await _readList('mataKuliah', _mataKuliahFromJson));
+      ..addAll(_readList(state, 'mataKuliah', _mataKuliahFromJson));
     _ruangan
       ..clear()
-      ..addAll(await _readList('ruangan', _ruanganFromJson));
+      ..addAll(_readList(state, 'ruangan', _ruanganFromJson));
     _kelas
       ..clear()
-      ..addAll(await _readList('kelas', _kelasFromJson));
+      ..addAll(_readList(state, 'kelas', _kelasFromJson));
     _dosenPengajar
       ..clear()
-      ..addAll(await _readList('dosenPengajar', _dosenPengajarFromJson));
+      ..addAll(_readList(state, 'dosenPengajar', _dosenPengajarFromJson));
     _krs
       ..clear()
-      ..addAll(await _readList('krs', _krsFromJson));
+      ..addAll(_readList(state, 'krs', _krsFromJson));
     _faseKrs
       ..clear()
-      ..addAll(await _readList('faseKrs', _faseKrsFromJson));
+      ..addAll(_readList(state, 'faseKrs', _faseKrsFromJson));
     _nilai
       ..clear()
-      ..addAll(await _readList('nilai', _nilaiFromJson));
+      ..addAll(_readList(state, 'nilai', _nilaiFromJson));
     _tugas
       ..clear()
-      ..addAll(await _readList('tugas', _tugasFromJson));
+      ..addAll(_readList(state, 'tugas', _tugasFromJson));
     _skripsi
       ..clear()
-      ..addAll(await _readList('skripsi', _skripsiFromJson));
+      ..addAll(_readList(state, 'skripsi', _skripsiFromJson));
     _magang
       ..clear()
-      ..addAll(await _readList('magang', _magangFromJson));
+      ..addAll(_readList(state, 'magang', _magangFromJson));
     _kkn
       ..clear()
-      ..addAll(await _readList('kkn', _kknFromJson));
+      ..addAll(_readList(state, 'kkn', _kknFromJson));
     _pertemuan
       ..clear()
-      ..addAll(await _readList('pertemuan', _pertemuanFromJson));
+      ..addAll(_readList(state, 'pertemuan', _pertemuanFromJson));
     _presensi
       ..clear()
-      ..addAll(await _readList('presensi', _presensiFromJson));
+      ..addAll(_readList(state, 'presensi', _presensiFromJson));
     _presensiDosen
       ..clear()
-      ..addAll(await _readList('presensiDosen', _presensiDosenFromJson));
+      ..addAll(_readList(state, 'presensiDosen', _presensiDosenFromJson));
   }
 
-  Future<List<T>> _readList<T>(
+  List<T> _readList<T>(
+    Map<String, dynamic> state,
     String key,
     T Function(Map<String, dynamic>) fromJson,
-  ) async {
-    final result = await _db!.query(
-      _stateTable,
-      columns: ['value'],
-      where: 'key = ?',
-      whereArgs: [key],
-      limit: 1,
-    );
-    if (result.isEmpty) return [];
-    final rows = jsonDecode(result.first['value'] as String) as List<dynamic>;
+  ) {
+    final rows = state[key] as List<dynamic>? ?? const [];
     return rows.map((row) => fromJson(_jsonMap(row))).toList();
   }
 
   void _saveAll() {
-    if (_db == null) return;
     unawaited(_saveAllAsync());
   }
 
   Future<void> _saveAllAsync() {
-    final db = _db;
-    if (db == null) return Future.value();
-    return db.transaction((txn) async {
-      await _writeList(txn, 'users', _users.map(_userToJson).toList());
-      await _writeList(
-        txn,
-        'fakultas',
-        _fakultas.map(_fakultasToJson).toList(),
-      );
-      await _writeList(txn, 'prodi', _prodi.map(_prodiToJson).toList());
-      await _writeList(
-        txn,
-        'tahunAjaran',
-        _tahunAjaran.map(_tahunAjaranToJson).toList(),
-      );
-      await _writeList(
-        txn,
-        'mahasiswa',
-        _mahasiswa.map(_mahasiswaToJson).toList(),
-      );
-      await _writeList(
-        txn,
-        'riwayatStatusMahasiswa',
-        _riwayatStatusMahasiswa.map(_riwayatStatusMahasiswaToJson).toList(),
-      );
-      await _writeList(txn, 'dosen', _dosen.map(_dosenToJson).toList());
-      await _writeList(
-        txn,
-        'mataKuliah',
-        _mataKuliah.map(_mataKuliahToJson).toList(),
-      );
-      await _writeList(txn, 'ruangan', _ruangan.map(_ruanganToJson).toList());
-      await _writeList(txn, 'kelas', _kelas.map(_kelasToJson).toList());
-      await _writeList(
-        txn,
-        'dosenPengajar',
-        _dosenPengajar.map(_dosenPengajarToJson).toList(),
-      );
-      await _writeList(txn, 'krs', _krs.map(_krsToJson).toList());
-      await _writeList(txn, 'faseKrs', _faseKrs.map(_faseKrsToJson).toList());
-      await _writeList(txn, 'nilai', _nilai.map(_nilaiToJson).toList());
-      await _writeList(txn, 'tugas', _tugas.map(_tugasToJson).toList());
-      await _writeList(txn, 'skripsi', _skripsi.map(_skripsiToJson).toList());
-      await _writeList(txn, 'magang', _magang.map(_magangToJson).toList());
-      await _writeList(txn, 'kkn', _kkn.map(_kknToJson).toList());
-      await _writeList(
-        txn,
-        'pertemuan',
-        _pertemuan.map(_pertemuanToJson).toList(),
-      );
-      await _writeList(
-        txn,
-        'presensi',
-        _presensi.map(_presensiToJson).toList(),
-      );
-      await _writeList(
-        txn,
-        'presensiDosen',
-        _presensiDosen.map(_presensiDosenToJson).toList(),
-      );
+    return _client.siakadState.saveState(_buildStateJson());
+  }
+
+  String _buildStateJson() {
+    return jsonEncode({
+      'users': _users.map(_userToJson).toList(),
+      'fakultas': _fakultas.map(_fakultasToJson).toList(),
+      'prodi': _prodi.map(_prodiToJson).toList(),
+      'tahunAjaran': _tahunAjaran.map(_tahunAjaranToJson).toList(),
+      'mahasiswa': _mahasiswa.map(_mahasiswaToJson).toList(),
+      'riwayatStatusMahasiswa': _riwayatStatusMahasiswa
+          .map(_riwayatStatusMahasiswaToJson)
+          .toList(),
+      'dosen': _dosen.map(_dosenToJson).toList(),
+      'mataKuliah': _mataKuliah.map(_mataKuliahToJson).toList(),
+      'ruangan': _ruangan.map(_ruanganToJson).toList(),
+      'kelas': _kelas.map(_kelasToJson).toList(),
+      'dosenPengajar': _dosenPengajar.map(_dosenPengajarToJson).toList(),
+      'krs': _krs.map(_krsToJson).toList(),
+      'faseKrs': _faseKrs.map(_faseKrsToJson).toList(),
+      'nilai': _nilai.map(_nilaiToJson).toList(),
+      'tugas': _tugas.map(_tugasToJson).toList(),
+      'skripsi': _skripsi.map(_skripsiToJson).toList(),
+      'magang': _magang.map(_magangToJson).toList(),
+      'kkn': _kkn.map(_kknToJson).toList(),
+      'pertemuan': _pertemuan.map(_pertemuanToJson).toList(),
+      'presensi': _presensi.map(_presensiToJson).toList(),
+      'presensiDosen': _presensiDosen.map(_presensiDosenToJson).toList(),
     });
   }
 
   String _saved(String message) {
+    _rebuildIndexes();
     _saveAll();
     return message;
-  }
-
-  Future<void> _writeList(
-    DatabaseExecutor executor,
-    String key,
-    List<Map<String, Object?>> rows,
-  ) {
-    return executor.insert(_stateTable, {
-      'key': key,
-      'value': jsonEncode(rows),
-    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Map<String, dynamic> _jsonMap(Object? value) {

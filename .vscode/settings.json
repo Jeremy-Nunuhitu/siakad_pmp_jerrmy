@@ -1,3 +1,16 @@
 {
-    "cmake.ignoreCMakeListsMissing": true
+    "cmake.ignoreCMakeListsMissing": true,
+    "java.import.gradle.enabled": true,
+    "java.import.exclusions": [
+        "**/siakad_backend/siakad_backend_flutter/android/**"
+    ],
+    "java.project.excludedPaths": [
+        "siakad_backend/siakad_backend_flutter/android"
+    ],
+    "files.exclude": {
+        "**/siakad_backend/siakad_backend_flutter": true
+    },
+    "search.exclude": {
+        "**/siakad_backend/siakad_backend_flutter": true
+    }
 }

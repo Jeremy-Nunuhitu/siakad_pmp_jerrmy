@@ -5,122 +5,68 @@ import '../models/siakad_models.dart';
 import '../services/mock_service.dart';
 import '../widgets/app_scaffold.dart';
 
-class KorproDashboardView extends StatelessWidget {
+part 'pimpinan/dashboard_snapshots.dart';
+part 'pimpinan/rektor_dashboard_widgets.dart';
+
+class KorproDashboardView extends StatefulWidget {
   const KorproDashboardView({required this.user, super.key});
 
   final User user;
 
   @override
-  Widget build(BuildContext context) {
-    final service = context.watch<MockService>();
-    final prodi = service.prodi.firstWhere((item) => item.id == user.scopeId);
-    final mahasiswa = service.mahasiswa
-        .where((item) => item.prodiId == user.scopeId)
-        .toList();
-    final mahasiswaIds = mahasiswa.map((item) => item.nim).toSet();
-    final mahasiswaMetrics = mahasiswa
-        .map((item) => _korproMahasiswaMetric(service, item))
-        .toList();
-    final mataKuliahIds = service.mataKuliah
-        .where((item) => item.prodiId == user.scopeId)
-        .map((item) => item.kode)
-        .toSet();
-    final kelas = service.kelas
-        .where((item) => mataKuliahIds.contains(item.mataKuliahId))
-        .toList();
-    final ruangKelas = kelas.map((item) => item.ruangan).toSet();
+  State<KorproDashboardView> createState() => _KorproDashboardViewState();
+}
+
+class _KorproDashboardViewState extends State<KorproDashboardView> {
+  DashboardCacheKey? _cachedKey;
+  _KorproDashboardSnapshot? _cachedSnapshot;
+
+  _KorproDashboardSnapshot _snapshotFor(MockService service) {
     final tahunAktif = service.tahunAjaran.firstWhere(
       (item) => item.aktif,
       orElse: () => service.tahunAjaran.last,
     );
-    final kelasAktif = kelas
-        .where((item) => item.tahunAjaranId == tahunAktif.id)
-        .toList();
-    final kelasMetrics = _korproKelasAttendanceMetrics(
-      service,
-      user.scopeId,
-      tahunAktif.id,
+    final key = DashboardCacheKey(
+      revision: service.dataRevision,
+      tahunAjaranId: tahunAktif.id,
+      prodiId: widget.user.scopeId,
     );
-    final kelasIds = kelasAktif.map((item) => item.id).toSet();
-    final krs = service.krs
-        .where(
-          (item) =>
-              mahasiswaIds.contains(item.mahasiswaId) &&
-              kelasIds.contains(item.kelasId),
-        )
-        .toList();
-    final approvedKrs = krs.where((item) => item.isValidated).length;
-    final krsRate = krs.isEmpty ? 0.0 : approvedKrs / krs.length;
-    final activeStudents = mahasiswa
-        .where((item) => item.status == StatusMahasiswa.aktif)
-        .length;
-    final avgIpk = mahasiswaMetrics.isEmpty
-        ? 0.0
-        : mahasiswaMetrics.fold<double>(0, (sum, item) => sum + item.ipk) /
-              mahasiswaMetrics.length;
-    final avgPresensi = mahasiswaMetrics.isEmpty
-        ? 0.0
-        : mahasiswaMetrics.fold<double>(
-                0,
-                (sum, item) => sum + item.presensiRate,
-              ) /
-              mahasiswaMetrics.length;
-    final totalSks = mahasiswaMetrics.fold<int>(
-      0,
-      (sum, item) => sum + item.sksDisetujui,
-    );
-    final avgSks = mahasiswaMetrics.isEmpty
-        ? 0.0
-        : totalSks / mahasiswaMetrics.length;
-    final riskStudents = mahasiswaMetrics
-        .where((item) => item.riskLevel > 0)
-        .length;
-    final completedMeetings = kelasMetrics.fold<int>(
-      0,
-      (sum, item) => sum + item.meetings.where((meeting) => meeting.hasData).length,
-    );
-    final totalMeetingSlots = kelasMetrics.length * 16;
-    final meetingProgress = totalMeetingSlots == 0
-        ? 0.0
-        : completedMeetings / totalMeetingSlots;
-    final healthScore =
-        ((avgPresensi * 0.32) +
-                ((avgIpk / 4).clamp(0.0, 1.0) * 0.26) +
-                (krsRate * 0.22) +
-                (meetingProgress * 0.20)) *
-            100;
-    final rankedStudents = mahasiswaMetrics.toList()
-      ..sort((a, b) => b.riskLevel.compareTo(a.riskLevel));
-    final rankedClasses = kelasMetrics
-        .where((item) => item.totalMahasiswa > 0)
-        .toList()
-      ..sort((a, b) => a.mahasiswaRate.compareTo(b.mahasiswaRate));
-    final points = <_IpkTahunPoint>[];
-    for (final tahun in service.tahunAjaran) {
-      final nilai = service.nilai
-          .where(
-            (item) =>
-                mahasiswaIds.contains(item.mahasiswaId) &&
-                item.tahunAjaranId == tahun.id,
-          )
-          .toList();
-      if (nilai.isEmpty) continue;
-      final semester = nilai
-          .map((item) => item.semester)
-          .reduce((a, b) => a < b ? a : b);
-      final rataRata =
-          nilai
-              .map((item) => _bobotNilai(item.nilaiHuruf))
-              .reduce((a, b) => a + b) /
-          nilai.length;
-      points.add(
-        _IpkTahunPoint(
-          label:
-              '${tahun.nama.replaceAll('20', '').replaceAll('/', '/')}\n${tahun.semester.label} S$semester',
-          value: rataRata,
-        ),
-      );
+    if (_cachedKey == key && _cachedSnapshot != null) {
+      return _cachedSnapshot!;
     }
+    final snapshot = _KorproDashboardSnapshot.build(
+      service: service,
+      prodiId: widget.user.scopeId,
+    );
+    _cachedKey = key;
+    _cachedSnapshot = snapshot;
+    return snapshot;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final service = context.read<MockService>();
+    final snapshot = _snapshotFor(service);
+    final prodi = snapshot.prodi;
+    final mahasiswa = snapshot.mahasiswa;
+    final mataKuliahIds = snapshot.mataKuliahIds;
+    final ruangKelas = snapshot.ruangKelas;
+    final tahunAktif = snapshot.tahunAktif;
+    final kelasAktif = snapshot.kelasAktif;
+    final kelasMetrics = snapshot.kelasMetrics;
+    final krsRate = snapshot.krsRate;
+    final activeStudents = snapshot.activeStudents;
+    final avgIpk = snapshot.avgIpk;
+    final avgPresensi = snapshot.avgPresensi;
+    final avgSks = snapshot.avgSks;
+    final riskStudents = snapshot.riskStudents;
+    final completedMeetings = snapshot.completedMeetings;
+    final totalMeetingSlots = snapshot.totalMeetingSlots;
+    final meetingProgress = snapshot.meetingProgress;
+    final healthScore = snapshot.healthScore;
+    final rankedStudents = snapshot.rankedStudents;
+    final rankedClasses = snapshot.rankedClasses;
+    final points = snapshot.points;
 
     return AppScaffold(
       title: 'Dashboard Korpro',
@@ -372,7 +318,9 @@ class _KorproDashboardKpiGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final activeRate = totalStudents == 0 ? 0.0 : activeStudents / totalStudents;
+    final activeRate = totalStudents == 0
+        ? 0.0
+        : activeStudents / totalStudents;
     final items = [
       _KorproDashboardKpi(
         label: 'Mahasiswa Aktif',
@@ -420,8 +368,7 @@ class _KorproDashboardKpiGrid extends StatelessWidget {
             : constraints.maxWidth >= 520
             ? 2
             : 1;
-        final width =
-            (constraints.maxWidth - ((columns - 1) * 12)) / columns;
+        final width = (constraints.maxWidth - ((columns - 1) * 12)) / columns;
         return Wrap(
           spacing: 12,
           runSpacing: 12,
@@ -692,8 +639,7 @@ class _KorproDashboardClassTile extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Tooltip(
-        message:
-            '${metric.hadirMahasiswa}/${metric.totalMahasiswa} data hadir',
+        message: '${metric.hadirMahasiswa}/${metric.totalMahasiswa} data hadir',
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -772,13 +718,9 @@ class _KorproDashboardInsightPanel extends StatelessWidget {
           );
           if (constraints.maxWidth < 760) {
             return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  studentPanel,
-                  const SizedBox(height: 16),
-                  classPanel,
-                ],
-              );
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [studentPanel, const SizedBox(height: 16), classPanel],
+            );
           }
           return Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -872,7 +814,7 @@ class _KorproJadwalViewState extends State<KorproJadwalView> {
 
   @override
   Widget build(BuildContext context) {
-    final service = context.watch<MockService>();
+    final service = context.read<MockService>();
     final prodi = service.prodi.firstWhere(
       (item) => item.id == widget.user.scopeId,
     );
@@ -914,7 +856,10 @@ class _KorproJadwalViewState extends State<KorproJadwalView> {
       for (final item in _hariAkademik)
         item: semuaJadwal.where((kelas) => kelas.hari == item).length,
     };
-    final roomCount = semuaJadwal.map((item) => item.ruanganKode).toSet().length;
+    final roomCount = semuaJadwal
+        .map((item) => item.ruanganKode)
+        .toSet()
+        .length;
     final lecturerCount = semuaJadwal
         .expand((item) => item.dosenIds)
         .toSet()
@@ -1031,7 +976,10 @@ _KorproScheduleMetric _korproScheduleMetric(MockService service, Kelas kelas) {
     ruangan: service.getRuanganName(kelas.ruangan),
     ruanganKode: kelas.ruangan,
     dosen: pengajar
-        .map((item) => '${service.getDosenName(item.nidnDosen)} (${item.peranMengajar})')
+        .map(
+          (item) =>
+              '${service.getDosenName(item.nidnDosen)} (${item.peranMengajar})',
+        )
         .join(', '),
     dosenIds: pengajar.map((item) => item.nidnDosen).toSet(),
     peserta: service.getJumlahPesertaKelas(kelas.id),
@@ -1048,10 +996,14 @@ List<String> _korproScheduleConflicts(List<_KorproScheduleMetric> metrics) {
       final b = metrics[j];
       if (a.hari != b.hari || a.jam != b.jam) continue;
       if (a.ruanganKode == b.ruanganKode) {
-        conflicts.add('${a.hari} ${a.jam}: ${a.ruangan} dipakai ${a.kelasId} dan ${b.kelasId}');
+        conflicts.add(
+          '${a.hari} ${a.jam}: ${a.ruangan} dipakai ${a.kelasId} dan ${b.kelasId}',
+        );
       }
       if (a.dosenIds.intersection(b.dosenIds).isNotEmpty) {
-        conflicts.add('${a.hari} ${a.jam}: dosen bentrok pada ${a.kelasId} dan ${b.kelasId}');
+        conflicts.add(
+          '${a.hari} ${a.jam}: dosen bentrok pada ${a.kelasId} dan ${b.kelasId}',
+        );
       }
     }
   }
@@ -1095,11 +1047,22 @@ class _KorproScheduleHero extends StatelessWidget {
             spacing: 10,
             runSpacing: 10,
             children: [
-              _KorproHeroChip(icon: Icons.class_rounded, label: '$totalKelas kelas'),
-              _KorproHeroChip(icon: Icons.meeting_room_rounded, label: '$ruang ruang'),
-              _KorproHeroChip(icon: Icons.co_present_rounded, label: '$dosen dosen'),
               _KorproHeroChip(
-                icon: conflicts == 0 ? Icons.verified_outlined : Icons.warning_amber_rounded,
+                icon: Icons.class_rounded,
+                label: '$totalKelas kelas',
+              ),
+              _KorproHeroChip(
+                icon: Icons.meeting_room_rounded,
+                label: '$ruang ruang',
+              ),
+              _KorproHeroChip(
+                icon: Icons.co_present_rounded,
+                label: '$dosen dosen',
+              ),
+              _KorproHeroChip(
+                icon: conflicts == 0
+                    ? Icons.verified_outlined
+                    : Icons.warning_amber_rounded,
                 label: '$conflicts potensi bentrok',
               ),
             ],
@@ -1143,7 +1106,9 @@ class _KorproScheduleControlPanel extends StatelessWidget {
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           SizedBox(
-            width: MediaQuery.sizeOf(context).width >= 900 ? 320 : double.infinity,
+            width: MediaQuery.sizeOf(context).width >= 900
+                ? 320
+                : double.infinity,
             child: TextField(
               controller: controller,
               onChanged: onQueryChanged,
@@ -1167,10 +1132,8 @@ class _KorproScheduleControlPanel extends StatelessWidget {
             value: tahunAjaranId,
             items: tahunAjaran
                 .map(
-                  (item) => DropdownMenuItem(
-                    value: item.id,
-                    child: Text(item.label),
-                  ),
+                  (item) =>
+                      DropdownMenuItem(value: item.id, child: Text(item.label)),
                 )
                 .toList(),
             onChanged: onTahunChanged,
@@ -1371,10 +1334,7 @@ class _KorproScheduleTimeline extends StatelessWidget {
 }
 
 class _KorproScheduleDaySection extends StatelessWidget {
-  const _KorproScheduleDaySection({
-    required this.day,
-    required this.metrics,
-  });
+  const _KorproScheduleDaySection({required this.day, required this.metrics});
 
   final String day;
   final List<_KorproScheduleMetric> metrics;
@@ -1389,14 +1349,17 @@ class _KorproScheduleDaySection extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.calendar_today_rounded, color: Theme.of(context).colorScheme.primary),
+              Icon(
+                Icons.calendar_today_rounded,
+                color: Theme.of(context).colorScheme.primary,
+              ),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   day,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
               Chip(label: Text('${metrics.length} kelas')),
@@ -1451,7 +1414,9 @@ class _KorproScheduleClassCardState extends State<_KorproScheduleClassCard> {
               ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.06)
               : Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outlineVariant,
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1462,7 +1427,9 @@ class _KorproScheduleClassCardState extends State<_KorproScheduleClassCard> {
                   width: 54,
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primary.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Column(
@@ -1503,7 +1470,10 @@ class _KorproScheduleClassCardState extends State<_KorproScheduleClassCard> {
                   message:
                       '${metric.peserta}/${metric.kapasitas} peserta di ${metric.ruangan}',
                   child: Chip(
-                    avatar: Icon(Icons.meeting_room_outlined, color: occupancyColor),
+                    avatar: Icon(
+                      Icons.meeting_room_outlined,
+                      color: occupancyColor,
+                    ),
                     label: Text(metric.ruanganKode),
                   ),
                 ),
@@ -1572,7 +1542,7 @@ class _KorproDosenViewState extends State<KorproDosenView> {
 
   @override
   Widget build(BuildContext context) {
-    final service = context.watch<MockService>();
+    final service = context.read<MockService>();
     final prodi = service.prodi.firstWhere(
       (item) => item.id == widget.user.scopeId,
     );
@@ -1625,11 +1595,8 @@ class _KorproDosenViewState extends State<KorproDosenView> {
           const SizedBox(height: 14),
           _KorproDosenGrid(
             metrics: filtered,
-            onSelected: (metric) => _showKorproDosenDetail(
-              context,
-              service,
-              metric,
-            ),
+            onSelected: (metric) =>
+                _showKorproDosenDetail(context, service, metric),
           ),
         ],
       ),
@@ -1652,7 +1619,9 @@ class _KorproDosenHero extends StatelessWidget {
   Widget build(BuildContext context) {
     final totalSks = metrics.fold<int>(0, (sum, item) => sum + item.totalSks);
     final avgSks = metrics.isEmpty ? 0.0 : totalSks / metrics.length;
-    final activeLecturers = metrics.where((item) => item.kelas.isNotEmpty).length;
+    final activeLecturers = metrics
+        .where((item) => item.kelas.isNotEmpty)
+        .length;
     final avgPresensi = metrics.isEmpty
         ? 0.0
         : metrics.fold<double>(0, (sum, item) => sum + item.presensiRate) /
@@ -1803,10 +1772,8 @@ class _KorproDosenControlPanel extends StatelessWidget {
             value: sort,
             items: _KorproDosenSort.values
                 .map(
-                  (item) => DropdownMenuItem(
-                    value: item,
-                    child: Text(item.label),
-                  ),
+                  (item) =>
+                      DropdownMenuItem(value: item, child: Text(item.label)),
                 )
                 .toList(),
             onChanged: (value) {
@@ -1903,10 +1870,7 @@ class _KorproDosenLoadDistribution extends StatelessWidget {
 }
 
 class _KorproDosenGrid extends StatelessWidget {
-  const _KorproDosenGrid({
-    required this.metrics,
-    required this.onSelected,
-  });
+  const _KorproDosenGrid({required this.metrics, required this.onSelected});
 
   final List<_KorproDosenMetric> metrics;
   final ValueChanged<_KorproDosenMetric> onSelected;
@@ -1929,8 +1893,7 @@ class _KorproDosenGrid extends StatelessWidget {
             : constraints.maxWidth >= 720
             ? 2
             : 1;
-        final width =
-            (constraints.maxWidth - ((columns - 1) * 14)) / columns;
+        final width = (constraints.maxWidth - ((columns - 1) * 14)) / columns;
         return Wrap(
           spacing: 14,
           runSpacing: 14,
@@ -2187,10 +2150,7 @@ _KorproDosenMetric _korproDosenMetric(
   );
 }
 
-void _sortKorproDosen(
-  List<_KorproDosenMetric> metrics,
-  _KorproDosenSort sort,
-) {
+void _sortKorproDosen(List<_KorproDosenMetric> metrics, _KorproDosenSort sort) {
   metrics.sort((a, b) {
     switch (sort) {
       case _KorproDosenSort.nama:
@@ -2261,9 +2221,18 @@ void _showKorproDosenDetail(
             tooltip: '${metric.presensiHadir}/${metric.presensiTotal} hadir',
           ),
           const SizedBox(height: 14),
-          _KorproDetailRow(label: 'Kelas diajar', value: '${metric.kelas.length}'),
-          _KorproDetailRow(label: 'Tugas aktif', value: '${metric.tugas.length}'),
-          _KorproDetailRow(label: 'Mahasiswa PA', value: '${metric.mahasiswaPa}'),
+          _KorproDetailRow(
+            label: 'Kelas diajar',
+            value: '${metric.kelas.length}',
+          ),
+          _KorproDetailRow(
+            label: 'Tugas aktif',
+            value: '${metric.tugas.length}',
+          ),
+          _KorproDetailRow(
+            label: 'Mahasiswa PA',
+            value: '${metric.mahasiswaPa}',
+          ),
           _KorproDetailRow(
             label: 'Bimbingan skripsi',
             value: '${metric.skripsi.length}',
@@ -2353,11 +2322,18 @@ class KorproMahasiswaView extends StatefulWidget {
 }
 
 class _KorproMahasiswaViewState extends State<KorproMahasiswaView> {
+  static const _pageSize = 10;
+
   final searchController = TextEditingController();
   String query = '';
   StatusMahasiswa? status;
   int? semester;
   _KorproMahasiswaSort sort = _KorproMahasiswaSort.nama;
+  int page = 0;
+  MockService? _cachedService;
+  String? _cachedProdiId;
+  int? _cachedRevision;
+  List<_KorproMahasiswaMetric> _cachedMetrics = const [];
 
   @override
   void dispose() {
@@ -2365,16 +2341,33 @@ class _KorproMahasiswaViewState extends State<KorproMahasiswaView> {
     super.dispose();
   }
 
+  List<_KorproMahasiswaMetric> _metricsFor(MockService service) {
+    if (_cachedService == service &&
+        _cachedProdiId == widget.user.scopeId &&
+        _cachedRevision == service.dataRevision) {
+      return _cachedMetrics;
+    }
+    _cachedService = service;
+    _cachedProdiId = widget.user.scopeId;
+    _cachedRevision = service.dataRevision;
+    _cachedMetrics = service.mahasiswa
+        .where((item) => item.prodiId == widget.user.scopeId)
+        .map((item) => _korproMahasiswaMetric(service, item))
+        .toList(growable: false);
+    return _cachedMetrics;
+  }
+
+  void _resetPage() {
+    page = 0;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final service = context.watch<MockService>();
+    final service = context.read<MockService>();
     final prodi = service.prodi.firstWhere(
       (item) => item.id == widget.user.scopeId,
     );
-    final allMetrics = service.mahasiswa
-        .where((item) => item.prodiId == widget.user.scopeId)
-        .map((item) => _korproMahasiswaMetric(service, item))
-        .toList();
+    final allMetrics = _metricsFor(service);
     final semesters = allMetrics.map((item) => item.mahasiswa.semester).toSet()
       ..removeWhere((item) => item <= 0);
     final filtered = allMetrics.where((item) {
@@ -2390,6 +2383,17 @@ class _KorproMahasiswaViewState extends State<KorproMahasiswaView> {
       return matchesQuery && matchesStatus && matchesSemester;
     }).toList();
     _sortKorproMahasiswa(filtered, sort);
+    final totalPages = filtered.isEmpty
+        ? 1
+        : ((filtered.length - 1) ~/ _pageSize) + 1;
+    final currentPage = page.clamp(0, totalPages - 1);
+    if (currentPage != page) {
+      page = currentPage;
+    }
+    final visibleMetrics = filtered
+        .skip(currentPage * _pageSize)
+        .take(_pageSize)
+        .toList(growable: false);
 
     return AppScaffold(
       title: 'Mahasiswa ${prodi.nama}',
@@ -2409,28 +2413,50 @@ class _KorproMahasiswaViewState extends State<KorproMahasiswaView> {
             semester: semester,
             sort: sort,
             semesters: semesters.toList()..sort(),
-            onQueryChanged: (value) => setState(() => query = value),
-            onStatusChanged: (value) => setState(() => status = value),
-            onSemesterChanged: (value) => setState(() => semester = value),
-            onSortChanged: (value) => setState(() => sort = value),
+            onQueryChanged: (value) => setState(() {
+              query = value;
+              _resetPage();
+            }),
+            onStatusChanged: (value) => setState(() {
+              status = value;
+              _resetPage();
+            }),
+            onSemesterChanged: (value) => setState(() {
+              semester = value;
+              _resetPage();
+            }),
+            onSortChanged: (value) => setState(() {
+              sort = value;
+              _resetPage();
+            }),
             onReset: () => setState(() {
               query = '';
               status = null;
               semester = null;
               sort = _KorproMahasiswaSort.nama;
+              _resetPage();
               searchController.clear();
             }),
           ),
           const SizedBox(height: 14),
           _KorproMahasiswaStatusStrip(metrics: allMetrics),
           const SizedBox(height: 14),
+          _KorproPaginationBar(
+            page: currentPage,
+            pageSize: _pageSize,
+            totalItems: filtered.length,
+            onPrevious: currentPage == 0
+                ? null
+                : () => setState(() => page = currentPage - 1),
+            onNext: currentPage >= totalPages - 1
+                ? null
+                : () => setState(() => page = currentPage + 1),
+          ),
+          const SizedBox(height: 14),
           _KorproMahasiswaGrid(
-            metrics: filtered,
-            onSelected: (metric) => _showKorproMahasiswaDetail(
-              context,
-              service,
-              metric,
-            ),
+            metrics: visibleMetrics,
+            onSelected: (metric) =>
+                _showKorproMahasiswaDetail(context, service, metric),
           ),
         ],
       ),
@@ -2652,10 +2678,8 @@ class _KorproMahasiswaControlPanel extends StatelessWidget {
               value: status,
               items: StatusMahasiswa.values
                   .map(
-                    (item) => DropdownMenuItem(
-                      value: item,
-                      child: Text(item.label),
-                    ),
+                    (item) =>
+                        DropdownMenuItem(value: item, child: Text(item.label)),
                   )
                   .toList(),
               onChanged: onStatusChanged,
@@ -2678,10 +2702,8 @@ class _KorproMahasiswaControlPanel extends StatelessWidget {
               value: sort,
               items: _KorproMahasiswaSort.values
                   .map(
-                    (item) => DropdownMenuItem(
-                      value: item,
-                      child: Text(item.label),
-                    ),
+                    (item) =>
+                        DropdownMenuItem(value: item, child: Text(item.label)),
                   )
                   .toList(),
               onChanged: (value) {
@@ -2761,10 +2783,7 @@ class _KorproMahasiswaStatusStrip extends StatelessWidget {
                           ),
                           const SizedBox(height: 7),
                           TweenAnimationBuilder<double>(
-                            tween: Tween(
-                              begin: 0,
-                              end: entry.value / maxValue,
-                            ),
+                            tween: Tween(begin: 0, end: entry.value / maxValue),
                             duration: const Duration(milliseconds: 620),
                             curve: Curves.easeOutCubic,
                             builder: (context, value, child) =>
@@ -2788,11 +2807,62 @@ class _KorproMahasiswaStatusStrip extends StatelessWidget {
   }
 }
 
-class _KorproMahasiswaGrid extends StatelessWidget {
-  const _KorproMahasiswaGrid({
-    required this.metrics,
-    required this.onSelected,
+class _KorproPaginationBar extends StatelessWidget {
+  const _KorproPaginationBar({
+    required this.page,
+    required this.pageSize,
+    required this.totalItems,
+    required this.onPrevious,
+    required this.onNext,
   });
+
+  final int page;
+  final int pageSize;
+  final int totalItems;
+  final VoidCallback? onPrevious;
+  final VoidCallback? onNext;
+
+  @override
+  Widget build(BuildContext context) {
+    final start = totalItems == 0 ? 0 : page * pageSize + 1;
+    final end = (page * pageSize + pageSize).clamp(0, totalItems);
+    final totalPages = totalItems == 0 ? 1 : ((totalItems - 1) ~/ pageSize) + 1;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                'Menampilkan $start-$end dari $totalItems mahasiswa',
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+            Text(
+              'Halaman ${page + 1}/$totalPages',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(width: 10),
+            IconButton.filledTonal(
+              tooltip: 'Sebelumnya',
+              onPressed: onPrevious,
+              icon: const Icon(Icons.chevron_left_rounded),
+            ),
+            const SizedBox(width: 6),
+            IconButton.filledTonal(
+              tooltip: 'Berikutnya',
+              onPressed: onNext,
+              icon: const Icon(Icons.chevron_right_rounded),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _KorproMahasiswaGrid extends StatelessWidget {
+  const _KorproMahasiswaGrid({required this.metrics, required this.onSelected});
 
   final List<_KorproMahasiswaMetric> metrics;
   final ValueChanged<_KorproMahasiswaMetric> onSelected;
@@ -2815,8 +2885,7 @@ class _KorproMahasiswaGrid extends StatelessWidget {
             : constraints.maxWidth >= 720
             ? 2
             : 1;
-        final width =
-            (constraints.maxWidth - ((columns - 1) * 14)) / columns;
+        final width = (constraints.maxWidth - ((columns - 1) * 14)) / columns;
         return Wrap(
           spacing: 14,
           runSpacing: 14,
@@ -3122,30 +3191,24 @@ _KorproMahasiswaMetric _korproMahasiswaMetric(
   MockService service,
   Mahasiswa mahasiswa,
 ) {
-  final krs = service.krs
-      .where((item) => item.mahasiswaId == mahasiswa.nim)
-      .toList();
+  final krs = service.getKrsMahasiswa(mahasiswa.nim);
   final approvedKrs = krs.where((item) => item.isValidated).toList();
-  final kelasById = {for (final item in service.kelas) item.id: item};
-  final mataKuliahById = {
-    for (final item in service.mataKuliah) item.kode: item,
-  };
   var sks = 0;
   for (final item in approvedKrs) {
-    final kelas = kelasById[item.kelasId];
-    final mataKuliah = kelas == null ? null : mataKuliahById[kelas.mataKuliahId];
+    final kelas = service.getKelasById(item.kelasId);
+    final mataKuliah = kelas == null
+        ? null
+        : service.getMataKuliahByKode(kelas.mataKuliahId);
     sks += mataKuliah?.sks ?? 0;
   }
-  final nilai = service.nilai
-      .where((item) => item.mahasiswaId == mahasiswa.nim)
-      .toList();
+  final nilai = service.getNilaiMahasiswa(mahasiswa.nim);
   final ipk = nilai.isEmpty
       ? 0.0
-      : nilai.map((item) => _bobotNilai(item.nilaiHuruf)).reduce((a, b) => a + b) /
+      : nilai
+                .map((item) => _bobotNilai(item.nilaiHuruf))
+                .reduce((a, b) => a + b) /
             nilai.length;
-  final presensi = service.presensi
-      .where((item) => item.mahasiswaId == mahasiswa.nim)
-      .toList();
+  final presensi = service.getPresensiMahasiswa(mahasiswa.nim);
   return _KorproMahasiswaMetric(
     mahasiswa: mahasiswa,
     ipk: ipk,
@@ -3210,7 +3273,10 @@ void _showKorproMahasiswaDetail(
           ),
           const SizedBox(height: 8),
           _KorproDetailRow(label: 'Semester', value: '${mahasiswa.semester}'),
-          _KorproDetailRow(label: 'Jenis Kelamin', value: mahasiswa.jenisKelamin),
+          _KorproDetailRow(
+            label: 'Jenis Kelamin',
+            value: mahasiswa.jenisKelamin,
+          ),
           _KorproDetailRow(label: 'Dosen PA', value: dosenPa),
           _KorproDetailRow(
             label: 'Email',
@@ -3281,7 +3347,10 @@ class _KorproDetailRow extends StatelessWidget {
           child: Text(label, style: Theme.of(context).textTheme.bodySmall),
         ),
         Expanded(
-          child: Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
+          child: Text(
+            value,
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
         ),
       ],
     ),
@@ -3332,7 +3401,7 @@ class _KorproPresensiOverviewViewState
 
   @override
   Widget build(BuildContext context) {
-    final service = context.watch<MockService>();
+    final service = context.read<MockService>();
     final prodi = service.prodi.firstWhere(
       (item) => item.id == widget.user.scopeId,
     );
@@ -3421,8 +3490,7 @@ class _KorproPresensiOverviewViewState
                           ),
                         )
                         .toList(),
-                    onChanged: (value) =>
-                        setState(() => tahunAjaranId = value),
+                    onChanged: (value) => setState(() => tahunAjaranId = value),
                   );
                   if (constraints.maxWidth < 680) {
                     return Column(
@@ -3543,8 +3611,7 @@ class _KorproAttendanceKpiGrid extends StatelessWidget {
             : constraints.maxWidth >= 520
             ? 2
             : 1;
-        final width =
-            (constraints.maxWidth - ((columns - 1) * 12)) / columns;
+        final width = (constraints.maxWidth - ((columns - 1) * 12)) / columns;
         return Wrap(
           spacing: 12,
           runSpacing: 12,
@@ -3974,10 +4041,9 @@ class _KorproAttentionList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ranked = kelasMetrics
-        .where((item) => item.totalMahasiswa > 0)
-        .toList()
-      ..sort((a, b) => a.mahasiswaRate.compareTo(b.mahasiswaRate));
+    final ranked =
+        kelasMetrics.where((item) => item.totalMahasiswa > 0).toList()
+          ..sort((a, b) => a.mahasiswaRate.compareTo(b.mahasiswaRate));
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -4061,13 +4127,12 @@ class _KorproAttentionTile extends StatelessWidget {
                     tween: Tween(begin: 0, end: metric.mahasiswaRate),
                     duration: const Duration(milliseconds: 700),
                     curve: Curves.easeOutCubic,
-                    builder: (context, value, child) =>
-                        LinearProgressIndicator(
-                          value: value,
-                          minHeight: 8,
-                          borderRadius: BorderRadius.circular(4),
-                          color: color,
-                        ),
+                    builder: (context, value, child) => LinearProgressIndicator(
+                      value: value,
+                      minHeight: 8,
+                      borderRadius: BorderRadius.circular(4),
+                      color: color,
+                    ),
                   ),
                 ],
               ),
@@ -4134,18 +4199,15 @@ List<_KorproKelasAttendanceMetric> _korproKelasAttendanceMetrics(
     final meetings = <_KorproMeetingAttendance>[];
     var hadirTotal = 0;
     var presensiTotal = 0;
+    final pertemuanByNumber = {
+      for (final pertemuan in service.getPertemuanKelas(item.id))
+        pertemuan.pertemuanKe: pertemuan,
+    };
     for (var number = 1; number <= 16; number++) {
-      final meeting = service.pertemuan.where(
-        (pertemuan) =>
-            pertemuan.kelasId == item.id && pertemuan.pertemuanKe == number,
-      );
-      final attendance = meeting.isEmpty
-          ? <Presensi>[]
-          : service.presensi
-                .where(
-                  (presensi) => presensi.pertemuanId == meeting.first.id,
-                )
-                .toList();
+      final meeting = pertemuanByNumber[number];
+      final attendance = meeting == null
+          ? const <Presensi>[]
+          : service.getPresensiPertemuan(meeting.id);
       final hadir = _countStatus(attendance, 'Hadir');
       hadirTotal += hadir;
       presensiTotal += attendance.length;
@@ -4199,104 +4261,53 @@ class _DekanDashboardViewState extends State<DekanDashboardView> {
   String? tahunAjaranId;
   SemesterAkademik? semester;
   String? prodiId;
+  DashboardCacheKey? _cachedKey;
+  _DekanDashboardSnapshot? _cachedSnapshot;
+
+  _DekanDashboardSnapshot _snapshotFor(MockService service, String tahunId) {
+    final key = DashboardCacheKey(
+      revision: service.dataRevision,
+      tahunAjaranId: tahunId,
+      semester: semester,
+      fakultasId: widget.user.scopeId,
+      prodiId: prodiId,
+    );
+    if (_cachedKey == key && _cachedSnapshot != null) {
+      return _cachedSnapshot!;
+    }
+    final snapshot = _DekanDashboardSnapshot.build(
+      service: service,
+      fakultasId: widget.user.scopeId,
+      tahunId: tahunId,
+      semester: semester,
+      prodiId: prodiId,
+    );
+    _cachedKey = key;
+    _cachedSnapshot = snapshot;
+    return snapshot;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final service = context.watch<MockService>();
-    final fakultas = service.fakultas.firstWhere(
-      (item) => item.id == widget.user.scopeId,
-    );
+    final service = context.read<MockService>();
     final tahunId = tahunAjaranId ?? service.tahunAjaranAktif.id;
-    final prodiFakultas = service.prodi
-        .where((item) => item.fakultasId == widget.user.scopeId)
-        .toList();
-    final scopedProdiIds = prodiFakultas
-        .where((item) => prodiId == null || item.id == prodiId)
-        .map((item) => item.id)
-        .toSet();
-    final mahasiswa = service.mahasiswa
-        .where(
-          (item) =>
-              scopedProdiIds.contains(item.prodiId) &&
-              item.status == StatusMahasiswa.aktif,
-        )
-        .toList();
-    final mahasiswaIds = mahasiswa.map((item) => item.nim).toSet();
-    final dosen = service.dosen
-        .where((item) => scopedProdiIds.contains(item.prodiId))
-        .toList();
-    final mataKuliah = service.mataKuliah
-        .where((item) => scopedProdiIds.contains(item.prodiId))
-        .toList();
-    final mataKuliahIds = mataKuliah.map((item) => item.kode).toSet();
-    final tahunTerpilih = service.tahunAjaran.firstWhere(
-      (item) => item.id == tahunId,
-    );
-    final kelas = service.kelas
-        .where(
-          (item) =>
-              mataKuliahIds.contains(item.mataKuliahId) &&
-              item.tahunAjaranId == tahunId &&
-              (semester == null || tahunTerpilih.semester == semester),
-        )
-        .toList();
-    final kelasIds = kelas.map((item) => item.id).toSet();
-    final krs = service.krs
-        .where(
-          (item) =>
-              mahasiswaIds.contains(item.mahasiswaId) &&
-              kelasIds.contains(item.kelasId) &&
-              item.tahunAjaranId == tahunId &&
-              (semester == null ||
-                  service.tahunAjaran
-                          .firstWhere((tahun) => tahun.id == item.tahunAjaranId)
-                          .semester ==
-                      semester),
-        )
-        .toList();
-    final sudahKrs = krs.map((item) => item.mahasiswaId).toSet().length;
-    final pertemuan = service.pertemuan
-        .where((item) => kelasIds.contains(item.kelasId))
-        .toList();
-    final pertemuanIds = pertemuan.map((item) => item.id).toSet();
-    final presensiMahasiswa = service.presensi
-        .where((item) => pertemuanIds.contains(item.pertemuanId))
-        .toList();
-    final presensiDosen = service.presensiDosen
-        .where((item) => pertemuanIds.contains(item.pertemuanId))
-        .toList();
-    final hadirMahasiswa = _countStatus(presensiMahasiswa, 'Hadir');
-    final hadirDosen = _countDosenStatus(presensiDosen, 'Hadir');
-    final ruangTerpakai = kelas.map((item) => item.ruangan).toSet();
-    final kelasAktif = pertemuan
-        .where((item) => item.status == StatusPertemuan.berlangsung)
-        .map((item) => item.kelasId)
-        .toSet()
-        .length;
-    final dosenBelumPresensi = dosen
-        .where(
-          (item) =>
-              kelas.any(
-                (kelas) => service.isDosenMengajarKelas(item.nidn, kelas.id),
-              ) &&
-              !presensiDosen.any((presensi) => presensi.dosenId == item.nidn),
-        )
-        .length;
-    final mataKuliahPresensiRendah = mataKuliah.where((mk) {
-      final ids = kelas
-          .where((item) => item.mataKuliahId == mk.kode)
-          .map((item) => item.id)
-          .toSet();
-      final ptmIds = pertemuan
-          .where((item) => ids.contains(item.kelasId))
-          .map((item) => item.id)
-          .toSet();
-      final items = presensiMahasiswa
-          .where((item) => ptmIds.contains(item.pertemuanId))
-          .toList();
-      if (items.isEmpty) return false;
-      return _countStatus(items, 'Hadir') / items.length < 0.75;
-    }).length;
+    final snapshot = _snapshotFor(service, tahunId);
+    final fakultas = snapshot.fakultas;
+    final prodiFakultas = snapshot.prodiFakultas;
+    final mahasiswa = snapshot.mahasiswa;
+    final dosen = snapshot.dosen;
+    final mataKuliah = snapshot.mataKuliah;
+    final kelas = snapshot.kelas;
+    final krs = snapshot.krs;
+    final sudahKrs = snapshot.sudahKrs;
+    final presensiMahasiswa = snapshot.presensiMahasiswa;
+    final presensiDosen = snapshot.presensiDosen;
+    final hadirMahasiswa = snapshot.hadirMahasiswa;
+    final hadirDosen = snapshot.hadirDosen;
+    final ruangTerpakai = snapshot.ruangTerpakai;
+    final kelasAktif = snapshot.kelasAktif;
+    final dosenBelumPresensi = snapshot.dosenBelumPresensi;
+    final mataKuliahPresensiRendah = snapshot.mataKuliahPresensiRendah;
 
     return AppScaffold(
       title: 'Dashboard Dekan - ${fakultas.nama}',
@@ -4525,271 +4536,306 @@ class _RektorDashboardViewState extends State<RektorDashboardView> {
   String? dosenId;
   KrsStatus? statusKrs;
   String? statusPresensi;
+  DashboardCacheKey? _cachedKey;
+  _RektorDashboardSnapshot? _cachedSnapshot;
+
+  _RektorDashboardSnapshot _snapshotFor(MockService service, String tahunId) {
+    final key = DashboardCacheKey(
+      revision: service.dataRevision,
+      tahunAjaranId: tahunId,
+      semester: semester,
+      fakultasId: fakultasId,
+      prodiId: prodiId,
+      mataKuliahId: mataKuliahId,
+      dosenId: dosenId,
+      statusKrs: statusKrs,
+      statusPresensi: statusPresensi,
+    );
+    if (_cachedKey == key && _cachedSnapshot != null) {
+      return _cachedSnapshot!;
+    }
+    final snapshot = _RektorDashboardSnapshot.build(
+      service: service,
+      tahunId: tahunId,
+      semester: semester,
+      fakultasId: fakultasId,
+      prodiId: prodiId,
+      mataKuliahId: mataKuliahId,
+      dosenId: dosenId,
+      statusKrs: statusKrs,
+      statusPresensi: statusPresensi,
+    );
+    _cachedKey = key;
+    _cachedSnapshot = snapshot;
+    return snapshot;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final service = context.watch<MockService>();
+    final service = context.read<MockService>();
     final tahunId = tahunAjaranId ?? service.tahunAjaranAktif.id;
-    final tahun = service.tahunAjaran.firstWhere((item) => item.id == tahunId);
-    final prodi = service.prodi.where((item) {
-      return (fakultasId == null || item.fakultasId == fakultasId) &&
-          (prodiId == null || item.id == prodiId);
-    }).toList();
-    final prodiIds = prodi.map((item) => item.id).toSet();
-    final mahasiswa = service.mahasiswa
-        .where((item) => prodiIds.contains(item.prodiId))
-        .toList();
-    final mahasiswaIds = mahasiswa.map((item) => item.nim).toSet();
-    final dosen = service.dosen
-        .where(
-          (item) =>
-              prodiIds.contains(item.prodiId) &&
-              (dosenId == null || item.nidn == dosenId),
-        )
-        .toList();
-    final mataKuliah = service.mataKuliah
-        .where(
-          (item) =>
-              prodiIds.contains(item.prodiId) &&
-              (mataKuliahId == null || item.kode == mataKuliahId),
-        )
-        .toList();
-    final mataKuliahIds = mataKuliah.map((item) => item.kode).toSet();
-    final kelas = service.kelas
-        .where(
-          (item) =>
-              mataKuliahIds.contains(item.mataKuliahId) &&
-              item.tahunAjaranId == tahunId &&
-              (semester == null || tahun.semester == semester) &&
-              (dosenId == null ||
-                  service.isDosenMengajarKelas(dosenId!, item.id)),
-        )
-        .toList();
-    final kelasIds = kelas.map((item) => item.id).toSet();
-    final krs = service.krs
-        .where(
-          (item) =>
-              mahasiswaIds.contains(item.mahasiswaId) &&
-              kelasIds.contains(item.kelasId) &&
-              item.tahunAjaranId == tahunId &&
-              (statusKrs == null || item.status == statusKrs),
-        )
-        .toList();
-    final pertemuan = service.pertemuan
-        .where((item) => kelasIds.contains(item.kelasId))
-        .toList();
-    final pertemuanIds = pertemuan.map((item) => item.id).toSet();
-    final presensiMahasiswa = service.presensi
-        .where(
-          (item) =>
-              pertemuanIds.contains(item.pertemuanId) &&
-              (statusPresensi == null ||
-                  _sameStatus(item.statusKehadiran, statusPresensi!)),
-        )
-        .toList();
-    final presensiDosen = service.presensiDosen
-        .where(
-          (item) =>
-              pertemuanIds.contains(item.pertemuanId) &&
-              (statusPresensi == null ||
-                  _sameStatus(item.statusKehadiran, statusPresensi!)),
-        )
-        .toList();
-    final hadirMahasiswa = _countStatus(presensiMahasiswa, 'Hadir');
-    final hadirDosen = _countDosenStatus(presensiDosen, 'Hadir');
-    final sudahKrs = krs.map((item) => item.mahasiswaId).toSet().length;
-    final krsApproved = krs.where((item) => item.isValidated).length;
-    final ruangTerpakai = kelas.map((item) => item.ruangan).toSet();
-    final fakultasMetrics = service.fakultas
-        .map((item) => _fakultasMetric(service, item.id, tahunId))
-        .toList();
-    final topFakultas = fakultasMetrics.isEmpty
-        ? '-'
-        : (fakultasMetrics.toList()
-                ..sort((a, b) => b.mahasiswa.compareTo(a.mahasiswa)))
-              .first
-              .nama;
-    final topProdi = service.prodi.isEmpty
-        ? '-'
-        : (service.prodi.toList()..sort(
-                (a, b) => service.mahasiswa
-                    .where((item) => item.prodiId == b.id)
-                    .length
-                    .compareTo(
-                      service.mahasiswa
-                          .where((item) => item.prodiId == a.id)
-                          .length,
-                    ),
-              ))
-              .first
-              .nama;
+    final snapshot = _snapshotFor(service, tahunId);
+    final tahun = snapshot.tahun;
+    final prodi = snapshot.prodi;
+    final prodiIds = snapshot.prodiIds;
+    final mahasiswa = snapshot.mahasiswa;
+    final dosen = snapshot.dosen;
+    final mataKuliah = snapshot.mataKuliah;
+    final kelas = snapshot.kelas;
+    final krs = snapshot.krs;
+    final pertemuan = snapshot.pertemuan;
+    final presensiMahasiswa = snapshot.presensiMahasiswa;
+    final presensiDosen = snapshot.presensiDosen;
+    final hadirMahasiswa = snapshot.hadirMahasiswa;
+    final hadirDosen = snapshot.hadirDosen;
+    final sudahKrs = snapshot.sudahKrs;
+    final krsApproved = snapshot.krsApproved;
+    final ruangTerpakai = snapshot.ruangTerpakai;
+    final fakultasMetrics = snapshot.fakultasMetrics;
+    final krsApprovalRate = snapshot.krsApprovalRate;
+    final presensiMahasiswaRate = snapshot.presensiMahasiswaRate;
+    final presensiDosenRate = snapshot.presensiDosenRate;
+    final ruangTerpakaiRate = snapshot.ruangTerpakaiRate;
+    final campusHealth = snapshot.campusHealth;
+    final waitingKrs = snapshot.waitingKrs;
+    final unusedRooms = snapshot.unusedRooms;
+    final fullClasses = snapshot.fullClasses;
 
     return AppScaffold(
       title: 'Dashboard Rektor',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.account_balance_outlined),
-              title: const Text('Dashboard Rektor - Universitas SIAKAD'),
-              subtitle: Text(
-                'Tahun Akademik ${tahun.label}\n'
-                'Tanggal ${_tanggalHariIni()} - Mode: Read Only',
-              ),
-              isThreeLine: true,
-              trailing: const Chip(label: Text('READ ONLY')),
-            ),
+          _RektorCommandHero(
+            tahun: tahun.label,
+            tanggal: _tanggalHariIni(),
+            campusHealth: campusHealth,
+            totalMahasiswa: mahasiswa.length,
+            totalDosen: dosen.length,
+            topFakultas: snapshot.topFakultas,
+            topProdi: snapshot.topProdi,
+            activeFilters: snapshot.activeFilters,
           ),
           const SizedBox(height: 14),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: [
-                  _Filter<String>(
-                    label: 'Tahun Akademik',
-                    value: tahunId,
-                    items: service.tahunAjaran
-                        .map(
-                          (item) => DropdownMenuItem(
-                            value: item.id,
-                            child: Text(item.label),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) => setState(() => tahunAjaranId = value),
-                  ),
-                  _Filter<SemesterAkademik>(
-                    label: 'Semester',
-                    value: semester,
-                    items: SemesterAkademik.values
-                        .map(
-                          (item) => DropdownMenuItem(
-                            value: item,
-                            child: Text(item.label),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) => setState(() => semester = value),
-                  ),
-                  _Filter<String>(
-                    label: 'Fakultas',
-                    value: fakultasId,
-                    items: service.fakultas
-                        .map(
-                          (item) => DropdownMenuItem(
-                            value: item.id,
-                            child: Text(item.nama),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) => setState(() {
-                      fakultasId = value;
-                      prodiId = null;
-                    }),
-                  ),
-                  _Filter<String>(
-                    label: 'Program Studi',
-                    value: prodiId,
-                    items: service.prodi
-                        .where(
-                          (item) =>
-                              fakultasId == null ||
-                              item.fakultasId == fakultasId,
-                        )
-                        .map(
-                          (item) => DropdownMenuItem(
-                            value: item.id,
-                            child: Text(item.nama),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) => setState(() => prodiId = value),
-                  ),
-                  _Filter<String>(
-                    label: 'Jenjang Pendidikan',
-                    value: 'S1',
-                    items: const [
-                      DropdownMenuItem(
-                        value: 'S1',
-                        child: Text('Sarjana (S1)'),
+          _RektorFilterPanel(
+            children: [
+              _Filter<String>(
+                label: 'Tahun Akademik',
+                value: tahunId,
+                items: service.tahunAjaran
+                    .map(
+                      (item) => DropdownMenuItem(
+                        value: item.id,
+                        child: Text(item.label),
                       ),
-                    ],
-                    onChanged: (_) {},
-                  ),
-                  _Filter<String>(
-                    label: 'Mata Kuliah',
-                    value: mataKuliahId,
-                    items: service.mataKuliah
-                        .where((item) => prodiIds.contains(item.prodiId))
-                        .map(
-                          (item) => DropdownMenuItem(
-                            value: item.kode,
-                            child: Text(item.nama),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) => setState(() => mataKuliahId = value),
-                  ),
-                  _Filter<String>(
-                    label: 'Dosen',
-                    value: dosenId,
-                    items: service.dosen
-                        .where((item) => prodiIds.contains(item.prodiId))
-                        .map(
-                          (item) => DropdownMenuItem(
-                            value: item.nidn,
-                            child: Text(item.nama),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) => setState(() => dosenId = value),
-                  ),
-                  _Filter<KrsStatus>(
-                    label: 'Status KRS',
-                    value: statusKrs,
-                    items: KrsStatus.values
-                        .map(
-                          (item) => DropdownMenuItem(
-                            value: item,
-                            child: Text(item.label),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) => setState(() => statusKrs = value),
-                  ),
-                  _Filter<String>(
-                    label: 'Status Presensi',
-                    value: statusPresensi,
-                    items: const [
-                      DropdownMenuItem(value: 'Hadir', child: Text('Hadir')),
-                      DropdownMenuItem(value: 'Izin', child: Text('Izin')),
-                      DropdownMenuItem(value: 'Sakit', child: Text('Sakit')),
-                      DropdownMenuItem(value: 'Alfa', child: Text('Alfa')),
-                    ],
-                    onChanged: (value) =>
-                        setState(() => statusPresensi = value),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: () => setState(() {
-                      tahunAjaranId = null;
-                      semester = null;
-                      fakultasId = null;
-                      prodiId = null;
-                      mataKuliahId = null;
-                      dosenId = null;
-                      statusKrs = null;
-                      statusPresensi = null;
-                    }),
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Reset Filter'),
-                  ),
-                ],
+                    )
+                    .toList(),
+                onChanged: (value) => setState(() => tahunAjaranId = value),
               ),
-            ),
+              _Filter<SemesterAkademik>(
+                label: 'Semester',
+                value: semester,
+                items: SemesterAkademik.values
+                    .map(
+                      (item) => DropdownMenuItem(
+                        value: item,
+                        child: Text(item.label),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) => setState(() => semester = value),
+              ),
+              _Filter<String>(
+                label: 'Fakultas',
+                value: fakultasId,
+                items: service.fakultas
+                    .map(
+                      (item) => DropdownMenuItem(
+                        value: item.id,
+                        child: Text(item.nama),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) => setState(() {
+                  fakultasId = value;
+                  prodiId = null;
+                }),
+              ),
+              _Filter<String>(
+                label: 'Program Studi',
+                value: prodiId,
+                items: service.prodi
+                    .where(
+                      (item) =>
+                          fakultasId == null || item.fakultasId == fakultasId,
+                    )
+                    .map(
+                      (item) => DropdownMenuItem(
+                        value: item.id,
+                        child: Text(item.nama),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) => setState(() => prodiId = value),
+              ),
+              _Filter<String>(
+                label: 'Jenjang Pendidikan',
+                value: 'S1',
+                items: const [
+                  DropdownMenuItem(value: 'S1', child: Text('Sarjana (S1)')),
+                ],
+                onChanged: (_) {},
+              ),
+              _Filter<String>(
+                label: 'Mata Kuliah',
+                value: mataKuliahId,
+                items: service.mataKuliah
+                    .where((item) => prodiIds.contains(item.prodiId))
+                    .map(
+                      (item) => DropdownMenuItem(
+                        value: item.kode,
+                        child: Text(item.nama),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) => setState(() => mataKuliahId = value),
+              ),
+              _Filter<String>(
+                label: 'Dosen',
+                value: dosenId,
+                items: service.dosen
+                    .where((item) => prodiIds.contains(item.prodiId))
+                    .map(
+                      (item) => DropdownMenuItem(
+                        value: item.nidn,
+                        child: Text(item.nama),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) => setState(() => dosenId = value),
+              ),
+              _Filter<KrsStatus>(
+                label: 'Status KRS',
+                value: statusKrs,
+                items: KrsStatus.values
+                    .map(
+                      (item) => DropdownMenuItem(
+                        value: item,
+                        child: Text(item.label),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) => setState(() => statusKrs = value),
+              ),
+              _Filter<String>(
+                label: 'Status Presensi',
+                value: statusPresensi,
+                items: const [
+                  DropdownMenuItem(value: 'Hadir', child: Text('Hadir')),
+                  DropdownMenuItem(value: 'Izin', child: Text('Izin')),
+                  DropdownMenuItem(value: 'Sakit', child: Text('Sakit')),
+                  DropdownMenuItem(value: 'Alfa', child: Text('Alfa')),
+                ],
+                onChanged: (value) => setState(() => statusPresensi = value),
+              ),
+              SizedBox(
+                height: 56,
+                child: OutlinedButton.icon(
+                  onPressed: () => setState(() {
+                    tahunAjaranId = null;
+                    semester = null;
+                    fakultasId = null;
+                    prodiId = null;
+                    mataKuliahId = null;
+                    dosenId = null;
+                    statusKrs = null;
+                    statusPresensi = null;
+                  }),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Reset'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _RektorExecutiveGrid(
+            items: [
+              _RektorExecutiveMetric(
+                title: 'Kesehatan Kampus',
+                value: campusHealth.toStringAsFixed(0),
+                suffix: '%',
+                icon: Icons.monitor_heart_outlined,
+                color: _dashboardScoreColor(campusHealth / 100),
+                progress: campusHealth / 100,
+                note: 'Skor gabungan KRS, presensi, kelas, dan ruangan',
+              ),
+              _RektorExecutiveMetric(
+                title: 'KRS Disetujui',
+                value: (krsApprovalRate * 100).toStringAsFixed(0),
+                suffix: '%',
+                icon: Icons.fact_check_outlined,
+                color: const Color(0xFF0B57D0),
+                progress: krsApprovalRate,
+                note: '$krsApproved dari ${krs.length} KRS',
+              ),
+              _RektorExecutiveMetric(
+                title: 'Presensi Mahasiswa',
+                value: (presensiMahasiswaRate * 100).toStringAsFixed(0),
+                suffix: '%',
+                icon: Icons.groups_2_outlined,
+                color: const Color(0xFF00897B),
+                progress: presensiMahasiswaRate,
+                note: '${presensiMahasiswa.length} rekaman presensi',
+              ),
+              _RektorExecutiveMetric(
+                title: 'Presensi Dosen',
+                value: (presensiDosenRate * 100).toStringAsFixed(0),
+                suffix: '%',
+                icon: Icons.co_present_outlined,
+                color: const Color(0xFF7B1FA2),
+                progress: presensiDosenRate,
+                note: '${presensiDosen.length} rekaman presensi dosen',
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _RektorSnapshotStrip(
+            stats: [
+              _Stat(
+                'Fakultas',
+                fakultasId == null ? service.fakultas.length : 1,
+              ),
+              _Stat('Program Studi', prodi.length),
+              _Stat('Mahasiswa', mahasiswa.length),
+              _Stat(
+                'Aktif',
+                mahasiswa
+                    .where((e) => e.status == StatusMahasiswa.aktif)
+                    .length,
+              ),
+              _Stat('Dosen', dosen.length),
+              _Stat('Mata Kuliah', mataKuliah.length),
+              _Stat('Kelas', kelas.length),
+              _Stat('Ruangan', service.ruangan.length),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _RektorActionDock(
+            onOpenData: widget.onOpenData,
+            onOpenKrs: widget.onOpenKrs,
+            onOpenPresensi: widget.onOpenPresensi,
+            onOpenLaporan: widget.onOpenLaporan,
+          ),
+          const SizedBox(height: 14),
+          _RektorInsightPanel(
+            campusHealth: campusHealth,
+            krsApprovalRate: krsApprovalRate,
+            presensiMahasiswaRate: presensiMahasiswaRate,
+            presensiDosenRate: presensiDosenRate,
+            ruangTerpakaiRate: ruangTerpakaiRate,
+            waitingKrs: waitingKrs,
+            unusedRooms: unusedRooms,
+            fullClasses: fullClasses,
           ),
           const SizedBox(height: 14),
           _StatSection(
@@ -4842,8 +4888,8 @@ class _RektorDashboardViewState extends State<RektorDashboardView> {
                 'Dosen PA',
                 mahasiswa.map((e) => e.pembimbingAkademikId).toSet().length,
               ),
-              _Stat('Prodi Mahasiswa Terbanyak', topProdi),
-              _Stat('Fakultas Mahasiswa Terbanyak', topFakultas),
+              _Stat('Prodi Mahasiswa Terbanyak', snapshot.topProdi),
+              _Stat('Fakultas Mahasiswa Terbanyak', snapshot.topFakultas),
             ],
           ),
           _StatSection(
@@ -4956,40 +5002,9 @@ class _RektorDashboardViewState extends State<RektorDashboardView> {
           ),
           _RektorAlerts(
             belumKrs: (mahasiswa.length - sudahKrs).clamp(0, 99999),
-            menungguValidasi: krs
-                .where((e) => e.isSubmitted && !e.isValidated && !e.isRejected)
-                .length,
-            ruanganKosong: (service.ruangan.length - ruangTerpakai.length)
-                .clamp(0, 99999),
-            kelasPenuh: kelas.where((e) => service.isKelasPenuh(e.id)).length,
-          ),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: [
-                  OutlinedButton(
-                    onPressed: widget.onOpenData,
-                    child: const Text('Detail Fakultas & Program Studi'),
-                  ),
-                  OutlinedButton(
-                    onPressed: widget.onOpenKrs,
-                    child: const Text('Detail KRS Universitas'),
-                  ),
-                  OutlinedButton(
-                    onPressed: widget.onOpenPresensi,
-                    child: const Text('Detail Presensi Universitas'),
-                  ),
-                  FilledButton.icon(
-                    onPressed: widget.onOpenLaporan,
-                    icon: const Icon(Icons.summarize_outlined),
-                    label: const Text('Lihat Laporan Akademik'),
-                  ),
-                ],
-              ),
-            ),
+            menungguValidasi: waitingKrs,
+            ruanganKosong: unusedRooms,
+            kelasPenuh: fullClasses,
           ),
         ],
       ),
@@ -5017,7 +5032,7 @@ class _PimpinanDashboardViewState extends State<PimpinanDashboardView> {
 
   @override
   Widget build(BuildContext context) {
-    final service = context.watch<MockService>();
+    final service = context.read<MockService>();
     final allowedProdiIds = widget.user.tingkatPimpinan == TingkatPimpinan.dekan
         ? service.prodi
               .where((item) => item.fakultasId == widget.user.scopeId)
@@ -5334,7 +5349,7 @@ class _PimpinanDataViewState extends State<PimpinanDataView> {
 
   @override
   Widget build(BuildContext context) {
-    final service = context.watch<MockService>();
+    final service = context.read<MockService>();
     final allowedProdiIds = _allowedProdiIds(service, widget.user);
     final allowedProdi = service.prodi
         .where((item) => allowedProdiIds.contains(item.id))
@@ -5386,71 +5401,71 @@ class _PimpinanDataViewState extends State<PimpinanDataView> {
     }
 
     final listChildren = switch (selectedMenu) {
-      _PimpinanDataMenu.mahasiswa => mahasiswa
-          .map(
-            (item) => ListTile(
-              leading: const Icon(Icons.person_outline),
-              title: Text(item.nama),
-              subtitle: Text(
-                '${item.nim} - ${item.status.label}\n${scopeLabel(item.prodiId)}',
-              ),
-              isThreeLine: true,
-            ),
-          )
-          .toList(),
-      _PimpinanDataMenu.dosen => dosen
-          .map(
-            (item) => ListTile(
-              leading: const Icon(Icons.co_present_outlined),
-              title: Text(item.nama),
-              subtitle: Text('${item.nidn}\n${scopeLabel(item.prodiId)}'),
-              isThreeLine: true,
-            ),
-          )
-          .toList(),
-      _PimpinanDataMenu.mataKuliah => mataKuliah
-          .map(
-            (item) => ListTile(
-              leading: const Icon(Icons.menu_book_outlined),
-              title: Text(item.nama),
-              subtitle: Text(
-                '${item.kode} - ${item.sks} SKS\n${scopeLabel(item.prodiId)}',
-              ),
-              isThreeLine: true,
-            ),
-          )
-          .toList(),
-      _PimpinanDataMenu.kelasKuliah => kelas
-          .map(
-            (item) {
-              final mataKuliah = service.mataKuliah.firstWhere(
-                (mk) => mk.kode == item.mataKuliahId,
-              );
-              return ListTile(
-                leading: const Icon(Icons.class_outlined),
-                title: Text('${mataKuliah.nama} - ${item.id}'),
+      _PimpinanDataMenu.mahasiswa =>
+        mahasiswa
+            .map(
+              (item) => ListTile(
+                leading: const Icon(Icons.person_outline),
+                title: Text(item.nama),
                 subtitle: Text(
-                  '${item.hari}, ${item.jam} - ${service.getRuanganName(item.ruangan)}\n'
-                  '${scopeLabel(mataKuliah.prodiId)}',
+                  '${item.nim} - ${item.status.label}\n${scopeLabel(item.prodiId)}',
                 ),
                 isThreeLine: true,
-              );
-            },
-          )
-          .toList(),
-      _PimpinanDataMenu.ruangKelas => ruangan
-          .map(
-            (item) => ListTile(
-              leading: const Icon(Icons.meeting_room_outlined),
-              title: Text(item.namaRuangan),
-              subtitle: Text(
-                '${item.kodeRuangan} - ${item.lokasi}\n'
-                'Kapasitas ${item.kapasitasRuangan} orang',
               ),
-              isThreeLine: true,
-            ),
-          )
-          .toList(),
+            )
+            .toList(),
+      _PimpinanDataMenu.dosen =>
+        dosen
+            .map(
+              (item) => ListTile(
+                leading: const Icon(Icons.co_present_outlined),
+                title: Text(item.nama),
+                subtitle: Text('${item.nidn}\n${scopeLabel(item.prodiId)}'),
+                isThreeLine: true,
+              ),
+            )
+            .toList(),
+      _PimpinanDataMenu.mataKuliah =>
+        mataKuliah
+            .map(
+              (item) => ListTile(
+                leading: const Icon(Icons.menu_book_outlined),
+                title: Text(item.nama),
+                subtitle: Text(
+                  '${item.kode} - ${item.sks} SKS\n${scopeLabel(item.prodiId)}',
+                ),
+                isThreeLine: true,
+              ),
+            )
+            .toList(),
+      _PimpinanDataMenu.kelasKuliah => kelas.map((item) {
+        final mataKuliah = service.mataKuliah.firstWhere(
+          (mk) => mk.kode == item.mataKuliahId,
+        );
+        return ListTile(
+          leading: const Icon(Icons.class_outlined),
+          title: Text('${mataKuliah.nama} - ${item.id}'),
+          subtitle: Text(
+            '${item.hari}, ${item.jam} - ${service.getRuanganName(item.ruangan)}\n'
+            '${scopeLabel(mataKuliah.prodiId)}',
+          ),
+          isThreeLine: true,
+        );
+      }).toList(),
+      _PimpinanDataMenu.ruangKelas =>
+        ruangan
+            .map(
+              (item) => ListTile(
+                leading: const Icon(Icons.meeting_room_outlined),
+                title: Text(item.namaRuangan),
+                subtitle: Text(
+                  '${item.kodeRuangan} - ${item.lokasi}\n'
+                  'Kapasitas ${item.kapasitasRuangan} orang',
+                ),
+                isThreeLine: true,
+              ),
+            )
+            .toList(),
     };
 
     return AppScaffold(
@@ -5567,7 +5582,7 @@ class PimpinanKrsView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final service = context.watch<MockService>();
+    final service = context.read<MockService>();
     final allowedProdiIds = _allowedProdiIds(service, user);
     final allowedMahasiswaIds = service.mahasiswa
         .where((item) => allowedProdiIds.contains(item.prodiId))
@@ -5612,7 +5627,7 @@ class _PimpinanPresensiViewState extends State<PimpinanPresensiView> {
 
   @override
   Widget build(BuildContext context) {
-    final service = context.watch<MockService>();
+    final service = context.read<MockService>();
     final allowedProdiIds = _allowedProdiIds(service, widget.user);
     final fakultas = service.fakultas.where((item) {
       return service.prodi.any(
@@ -5687,11 +5702,10 @@ class _PimpinanPresensiViewState extends State<PimpinanPresensiView> {
             transitionBuilder: (child, animation) => FadeTransition(
               opacity: animation,
               child: SlideTransition(
-                position:
-                    Tween<Offset>(
-                      begin: const Offset(0.04, 0),
-                      end: Offset.zero,
-                    ).animate(animation),
+                position: Tween<Offset>(
+                  begin: const Offset(0.04, 0),
+                  end: Offset.zero,
+                ).animate(animation),
                 child: child,
               ),
             ),
@@ -5816,8 +5830,7 @@ class _PresensiSmallMultipleGrid extends StatelessWidget {
             : constraints.maxWidth >= 650
             ? 2
             : 1;
-        final width =
-            (constraints.maxWidth - ((columns - 1) * 14)) / columns;
+        final width = (constraints.maxWidth - ((columns - 1) * 14)) / columns;
         return Wrap(
           spacing: 14,
           runSpacing: 14,
@@ -6117,10 +6130,7 @@ class _PresensiChartLegend extends StatelessWidget {
       spacing: 12,
       runSpacing: 6,
       children: const [
-        _PresensiLegendItem(
-          label: 'Mahasiswa',
-          color: _presensiMahasiswaColor,
-        ),
+        _PresensiLegendItem(label: 'Mahasiswa', color: _presensiMahasiswaColor),
         _PresensiLegendItem(label: 'Dosen', color: _presensiDosenColor),
       ],
     );
@@ -6158,7 +6168,7 @@ class PimpinanLaporanView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final service = context.watch<MockService>();
+    final service = context.read<MockService>();
     final prodiIds = user.tingkatPimpinan == TingkatPimpinan.dekan
         ? service.prodi
               .where((item) => item.fakultasId == user.scopeId)
@@ -6723,6 +6733,11 @@ class _FakultasMetric {
   final double presensiDosen;
   final int ruanganTerpakai;
 
+  double get healthScore =>
+      (krsDisetujui * 0.34) +
+      (presensiMahasiswa * 0.36) +
+      (presensiDosen * 0.30);
+
   String get status {
     if (krsDisetujui >= 0.8 && presensiMahasiswa >= 0.75) return 'Baik';
     if (krsDisetujui < 0.5 || presensiMahasiswa < 0.5) return 'Kritis';
@@ -6735,50 +6750,37 @@ _FakultasMetric _fakultasMetric(
   String fakultasId,
   String tahunAjaranId,
 ) {
-  final prodiIds = service.prodi
-      .where((item) => item.fakultasId == fakultasId)
+  final prodiIds = service
+      .prodiByFakultasId(fakultasId)
       .map((item) => item.id)
       .toSet();
-  final mahasiswaIds = service.mahasiswa
-      .where((item) => prodiIds.contains(item.prodiId))
+  final mahasiswaIds = service
+      .mahasiswaByProdiIds(prodiIds)
       .map((item) => item.nim)
       .toSet();
-  final dosenIds = service.dosen
-      .where((item) => prodiIds.contains(item.prodiId))
+  final dosenIds = service
+      .dosenByProdiIds(prodiIds)
       .map((item) => item.nidn)
       .toSet();
-  final mkIds = service.mataKuliah
-      .where((item) => prodiIds.contains(item.prodiId))
+  final mkIds = service
+      .mataKuliahByProdiIds(prodiIds)
       .map((item) => item.kode)
       .toSet();
-  final kelas = service.kelas
-      .where(
-        (item) =>
-            mkIds.contains(item.mataKuliahId) &&
-            item.tahunAjaranId == tahunAjaranId,
-      )
+  final kelas = service
+      .kelasByTahunAjaran(tahunAjaranId)
+      .where((item) => mkIds.contains(item.mataKuliahId))
       .toList();
   final kelasIds = kelas.map((item) => item.id).toSet();
-  final krs = service.krs
-      .where(
-        (item) =>
-            mahasiswaIds.contains(item.mahasiswaId) &&
-            kelasIds.contains(item.kelasId),
-      )
+  final krs = service
+      .krsByKelasIds(kelasIds)
+      .where((item) => mahasiswaIds.contains(item.mahasiswaId))
       .toList();
-  final pertemuan = service.pertemuan
-      .where((item) => kelasIds.contains(item.kelasId))
-      .toList();
+  final pertemuan = service.pertemuanByKelasIds(kelasIds);
   final pertemuanIds = pertemuan.map((item) => item.id).toSet();
-  final presensi = service.presensi
-      .where((item) => pertemuanIds.contains(item.pertemuanId))
-      .toList();
-  final presensiDosen = service.presensiDosen
-      .where(
-        (item) =>
-            pertemuanIds.contains(item.pertemuanId) &&
-            dosenIds.contains(item.dosenId),
-      )
+  final presensi = service.presensiByPertemuanIds(pertemuanIds);
+  final presensiDosen = service
+      .presensiDosenByPertemuanIds(pertemuanIds)
+      .where((item) => dosenIds.contains(item.dosenId))
       .toList();
   return _FakultasMetric(
     nama: service.fakultas.firstWhere((item) => item.id == fakultasId).nama,
@@ -6809,6 +6811,8 @@ class _RektorFakultasComparison extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final sorted = metrics.toList()
+      ..sort((a, b) => b.healthScore.compareTo(a.healthScore));
     return Card(
       margin: const EdgeInsets.only(bottom: 14),
       child: Padding(
@@ -6816,16 +6820,65 @@ class _RektorFakultasComparison extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              'Perbandingan Antar Fakultas',
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primary.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    Icons.insights_outlined,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Perbandingan Antar Fakultas',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 12),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final width = constraints.maxWidth >= 900
+                    ? (constraints.maxWidth - 24) / 3
+                    : constraints.maxWidth;
+                return Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: sorted
+                      .take(3)
+                      .map(
+                        (item) => SizedBox(
+                          width: width,
+                          child: _RektorFacultyPulse(metric: item),
+                        ),
+                      )
+                      .toList(),
+                );
+              },
+            ),
+            const SizedBox(height: 14),
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: DataTable(
+                headingRowColor: WidgetStatePropertyAll(
+                  Theme.of(context).colorScheme.primaryContainer,
+                ),
+                border: TableBorder(
+                  horizontalInside: BorderSide(
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                  ),
+                ),
                 columns: const [
                   DataColumn(label: Text('Fakultas')),
                   DataColumn(label: Text('Prodi')),
@@ -6838,7 +6891,7 @@ class _RektorFakultasComparison extends StatelessWidget {
                   DataColumn(label: Text('Ruangan')),
                   DataColumn(label: Text('Status')),
                 ],
-                rows: metrics
+                rows: sorted
                     .map(
                       (item) => DataRow(
                         cells: [
@@ -6863,7 +6916,19 @@ class _RektorFakultasComparison extends StatelessWidget {
                             ),
                           ),
                           DataCell(Text('${item.ruanganTerpakai}')),
-                          DataCell(Chip(label: Text(item.status))),
+                          DataCell(
+                            Chip(
+                              avatar: Icon(
+                                item.status == 'Baik'
+                                    ? Icons.check_circle_outline
+                                    : item.status == 'Kritis'
+                                    ? Icons.warning_amber_outlined
+                                    : Icons.info_outline,
+                                size: 18,
+                              ),
+                              label: Text(item.status),
+                            ),
+                          ),
                         ],
                       ),
                     )
@@ -6877,6 +6942,57 @@ class _RektorFakultasComparison extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _RektorFacultyPulse extends StatelessWidget {
+  const _RektorFacultyPulse({required this.metric});
+  final _FakultasMetric metric;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _dashboardScoreColor(metric.healthScore);
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.22)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  metric.nama,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
+              Chip(
+                label: Text(
+                  '${(metric.healthScore * 100).toStringAsFixed(0)}%',
+                ),
+                visualDensity: VisualDensity.compact,
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          _RektorSignalBar(label: 'KRS', value: metric.krsDisetujui),
+          _RektorSignalBar(
+            label: 'Presensi Mhs',
+            value: metric.presensiMahasiswa,
+          ),
+          _RektorSignalBar(
+            label: 'Presensi Dosen',
+            value: metric.presensiDosen,
+          ),
+        ],
       ),
     );
   }
@@ -6898,42 +7014,122 @@ class _RektorAlerts extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Card(
     margin: const EdgeInsets.only(bottom: 14),
+    color: Theme.of(context).colorScheme.surface,
     child: Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            'Peringatan Akademik Universitas',
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          Row(
+            children: [
+              Icon(
+                Icons.notification_important_outlined,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(width: 10),
+              Text(
+                'Peringatan Akademik Universitas',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
-          _WarningTile(
-            icon: Icons.assignment_late_outlined,
-            label: 'Mahasiswa belum mengisi KRS',
-            value: belumKrs,
-          ),
-          _WarningTile(
-            icon: Icons.pending_actions_outlined,
-            label: 'KRS masih menunggu validasi',
-            value: menungguValidasi,
-          ),
-          _WarningTile(
-            icon: Icons.meeting_room_outlined,
-            label: 'Ruangan belum digunakan',
-            value: ruanganKosong,
-          ),
-          _WarningTile(
-            icon: Icons.groups_outlined,
-            label: 'Kelas dengan kapasitas penuh',
-            value: kelasPenuh,
+          const SizedBox(height: 12),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final width = constraints.maxWidth >= 900
+                  ? (constraints.maxWidth - 30) / 4
+                  : constraints.maxWidth >= 560
+                  ? (constraints.maxWidth - 10) / 2
+                  : constraints.maxWidth;
+              return Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  _RektorAlertCard(
+                    icon: Icons.assignment_late_outlined,
+                    label: 'Belum KRS',
+                    value: belumKrs,
+                    width: width,
+                  ),
+                  _RektorAlertCard(
+                    icon: Icons.pending_actions_outlined,
+                    label: 'Menunggu Validasi',
+                    value: menungguValidasi,
+                    width: width,
+                  ),
+                  _RektorAlertCard(
+                    icon: Icons.meeting_room_outlined,
+                    label: 'Ruangan Kosong',
+                    value: ruanganKosong,
+                    width: width,
+                  ),
+                  _RektorAlertCard(
+                    icon: Icons.groups_outlined,
+                    label: 'Kelas Penuh',
+                    value: kelasPenuh,
+                    width: width,
+                  ),
+                ],
+              );
+            },
           ),
         ],
       ),
     ),
   );
+}
+
+class _RektorAlertCard extends StatelessWidget {
+  const _RektorAlertCard({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.width,
+  });
+
+  final IconData icon;
+  final String label;
+  final int value;
+  final double width;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = value == 0 ? Colors.green : Colors.orange;
+    return SizedBox(
+      width: width,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.24)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: color),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+            Text(
+              '$value',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                color: color,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 String _tanggalHariIni() {

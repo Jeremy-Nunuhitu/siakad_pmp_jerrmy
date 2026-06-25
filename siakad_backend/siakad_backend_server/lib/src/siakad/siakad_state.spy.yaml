@@ -1,0 +1,5 @@
+class: SiakadState
+table: siakad_state
+fields:
+  key: String
+  value: String

@@ -1,0 +1,38 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "siakad_backend_flutter",
+            "cwd": "${workspaceFolder}/siakad_backend_flutter",
+            "request": "launch",
+            "type": "dart",
+            "program": "lib/main.dart"
+        },
+        {
+            "name": "siakad_backend_server",
+            "cwd": "${workspaceFolder}/siakad_backend_server",
+            "request": "launch",
+            "type": "dart",
+            "preLaunchTask": "docker_compose_up",
+            "program": "bin/main.dart",
+            "env": {
+                "SERVERPOD_PASSWORD_database": "v0-pqagO_xHp0kt-HWNBmfm1jTSSY-ZK"
+            },
+            "args": [
+                "--apply-migrations"
+            ]
+        }
+    ],
+    "compounds": [
+        {
+            "name": "siakad_backend (full stack)",
+            "configurations": [
+                "siakad_backend_server",
+                "siakad_backend_flutter"
+            ],
+            "presentation": {
+                "order": 1
+            }
+        }
+    ]
+}

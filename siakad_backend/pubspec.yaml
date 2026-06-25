@@ -1,0 +1,11 @@
+name: _
+publish_to: none
+
+environment:
+  sdk: '^3.8.0'
+
+workspace:
+  - siakad_backend_client
+  - siakad_backend_server
+  - siakad_backend_flutter
+
