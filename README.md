@@ -1,6 +1,24 @@
 # siakad_jeremy
 
-Flutter SIAKAD app with a Serverpod backend and PostgreSQL persistence.
+Aplikasi Flutter SIAKAD dengan backend Serverpod dan persistence PostgreSQL.
+Project ini berisi frontend multi-role, backend API, seed data demo, dan tabel
+relasional untuk data akademik utama.
+
+## Status Saat Ini
+
+- Frontend Flutter memakai Provider dan `MockService` sebagai lapisan domain.
+- Backend Serverpod menyimpan state aplikasi di `siakad_state` dan menjaga
+  proyeksi tabel relasional seperti `mahasiswa`, `dosen`, `kelas`, `krs`,
+  `nilai`, `pertemuan`, dan `presensi`.
+- Schema tabel domain dibuat lewat migration Serverpod
+  `20260702123000000`, bukan lagi dari endpoint runtime.
+- Startup pertama mengisi data dari `assets/database/siakad_seed.json` ketika
+  backend masih kosong.
+- Perubahan CRUD normal sekarang dikirim sebagai delta per baris melalui
+  `applyRowChanges`, bukan full-state save. Ini mengurangi risiko perubahan
+  user lain tertimpa oleh snapshot lama.
+- Full-state save tetap dipakai untuk bootstrap awal atau resync eksplisit.
+- Dokumentasi detail persistence ada di [`docs/persistence.md`](docs/persistence.md).
 
 ## Run Backend
 
@@ -10,11 +28,20 @@ docker compose up -d postgres redis
 dart bin\main.dart --apply-migrations
 ```
 
-The development API runs at `http://localhost:8080/`.
+Development API berjalan di `http://localhost:8080/`.
+Pastikan `--apply-migrations` berhasil sebelum menjalankan Flutter. Endpoint
+`siakadState` sekarang hanya memvalidasi schema dan akan gagal eksplisit jika
+tabel domain belum tersedia.
 
-To restart PostgreSQL and Redis without losing data, use `docker compose stop`
-and `docker compose up -d postgres redis`. Do not use `docker compose down -v`
-unless you intentionally want to delete the PostgreSQL volume.
+Untuk restart PostgreSQL dan Redis tanpa menghapus data:
+
+```powershell
+docker compose stop
+docker compose up -d postgres redis
+```
+
+Jangan gunakan `docker compose down -v` kecuali memang ingin menghapus volume
+PostgreSQL.
 
 ## Run Flutter
 
@@ -23,29 +50,28 @@ flutter pub get
 flutter run -d windows --dart-define=SIAKAD_API_URL=http://localhost:8080/
 ```
 
-The Flutter app now reads and writes its SIAKAD state through Serverpod. The
-first app startup seeds PostgreSQL from `assets/database/siakad_seed.json` when
-the backend state is empty.
+Jika backend berjalan di host lain, ubah nilai `SIAKAD_API_URL`.
 
-## Seed PostgreSQL Tables
+## Seed dan Resync Data
+
+Isi ulang Serverpod state dan sinkronkan tabel domain:
 
 ```powershell
 dart run tool\seed_backend.dart
 ```
 
-This fills the Serverpod state and synchronizes the visible SIAKAD entity tables:
-`mahasiswa`, `dosen`, `fakultas`, `prodi`, `mata_kuliah`, `ruangan`, `kelas`,
-`dosen_pengajar`, `krs`, `nilai`, `tugas`, `skripsi`, `magang`, `kkn`,
-`pertemuan`, `presensi`, and `presensi_dosen`.
-
-If the app state still exists but the visible pgAdmin tables are empty, resync
-the relational tables from Serverpod state:
+Jika state masih ada tetapi tabel relasional di pgAdmin kosong, jalankan resync:
 
 ```powershell
 dart run tool\resync_backend_tables.dart
 ```
 
-## Generate Large Demo Dataset
+Tabel domain yang disinkronkan meliputi `mahasiswa`, `dosen`, `fakultas`,
+`prodi`, `mata_kuliah`, `ruangan`, `kelas`, `dosen_pengajar`, `krs`, `nilai`,
+`tugas`, `skripsi`, `magang`, `kkn`, `pertemuan`, `presensi`, dan
+`presensi_dosen`.
+
+## Generate Dataset Demo Besar
 
 ```powershell
 python tool\generate_bulk_siakad_data.py
@@ -54,30 +80,58 @@ docker exec siakad_backend_server-postgres-1 psql -U postgres -d siakad_backend 
 dart run tool\check_backend_state.dart
 ```
 
-The bulk dataset contains 5 faculties, 25 programs, 5000 students, 375 lecturers,
-and related academic records including KRS, grades, meetings, lecturer
-attendance, student attendance, assignments, thesis, internship, and KKN data.
+Dataset besar berisi 5 fakultas, 25 prodi, 5000 mahasiswa, 375 dosen, dan data
+akademik terkait termasuk KRS, nilai, pertemuan, presensi dosen, presensi
+mahasiswa, tugas, skripsi, magang, dan KKN.
 
 ## Integrasi Backend
 
-Backend tetap kompatibel dengan state JSON aplikasi pada tabel `siakad_state`,
-tetapi tabel domain sekarang ikut dikelola sebagai proyeksi relasional yang
-lebih aman. Saat state disimpan, backend melakukan delete incremental untuk
-baris yang hilang dan `INSERT ... ON CONFLICT DO UPDATE` untuk baris yang ada,
-sehingga tabel domain tidak lagi dikosongkan dengan `TRUNCATE`.
+Backend kompatibel dengan state JSON aplikasi pada tabel `siakad_state`, tetapi
+juga menjaga tabel domain sebagai proyeksi relasional. Sinkronisasi row memakai
+delete incremental dan `INSERT ... ON CONFLICT DO UPDATE`, sehingga tabel domain
+tidak dikosongkan total pada setiap save.
 
-Tabel domain juga dibuat dengan index dan foreign key penting untuk relasi utama
-seperti fakultas-prodi, prodi-mahasiswa, prodi-dosen, kelas-KRS, kelas-nilai,
-pertemuan-presensi, dan presensi dosen. Endpoint `siakadState` menyediakan
-operasi CRUD generik berbasis whitelist tabel: `listRows`, `getRow`,
-`upsertRow`, dan `deleteRow`.
+Tabel domain, index, dan foreign key dibuat secara deterministik oleh migration
+`20260702123000000`. Backend tidak lagi menjalankan DDL seperti
+`CREATE TABLE`, `ALTER TABLE ... DROP NOT NULL`, atau foreign key `NOT VALID`
+dari endpoint request. Migration juga mengembalikan `NOT NULL` untuk kolom
+wajib dan memvalidasi foreign key yang sudah ada. Jika schema belum siap,
+endpoint mengembalikan error agar operator menjalankan migrasi terlebih dahulu.
+
+Endpoint `siakadState` menyediakan operasi berbasis whitelist tabel:
+`listRows`, `getRow`, `upsertRow`, `applyRowChanges`, dan `deleteRow`.
+Frontend saat ini memakai `getState` untuk initial load, lalu memakai
+`applyRowChanges` untuk persistence perubahan normal.
 
 Konfigurasi development mengaktifkan Redis dari `docker-compose`. Password
 database dan Redis dapat dioverride dengan environment variable
-`SIAKAD_DB_PASSWORD` dan `SIAKAD_REDIS_PASSWORD`, sementara default lokal tetap
-tersedia agar setup tugas/prototipe masih mudah dijalankan.
+`SIAKAD_DB_PASSWORD` dan `SIAKAD_REDIS_PASSWORD`.
 
-Catatan produksi: UI Flutter saat ini masih memakai alur state JSON penuh untuk
-kompatibilitas fitur yang sudah ada. Langkah lanjutan untuk produksi besar
-adalah memindahkan tiap aksi UI agar memanggil endpoint CRUD per entitas secara
-langsung dan menambahkan model Serverpod typed untuk tiap tabel domain.
+## Test dan Quality Check
+
+```powershell
+flutter test
+flutter analyze
+```
+
+Status terakhir:
+
+- `flutter test`: lulus, 2 test.
+- `flutter analyze`: lulus tanpa issue.
+
+Backend integration test membutuhkan PostgreSQL test yang aktif sesuai
+konfigurasi Serverpod test.
+
+## Catatan Produksi
+
+Project ini sudah lebih aman dari risiko overwrite full-state antar-client,
+tetapi belum siap produksi multi-user penuh. Pekerjaan lanjutan yang masih
+penting:
+
+- Tambahkan auth dan role guard di endpoint backend.
+- Hash password dan hilangkan kredensial demo dari build non-development.
+- Tambahkan optimistic concurrency per row, misalnya `version` atau `updatedAt`.
+- Tampilkan status pending/error save di UI dengan memakai
+  `MockService.lastPersistenceError`.
+- Migrasikan aksi UI penting ke endpoint domain typed agar validasi dan scope
+  akses berada di backend.

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:siakad_backend_client/siakad_backend_client.dart';
 
@@ -53,6 +54,10 @@ class MockService {
   final Client _client;
   Future<void> _saveQueue = Future.value();
   Map<String, Map<String, String>> _persistedRows = {};
+  Object? _lastPersistenceError;
+
+  Object? get lastPersistenceError => _lastPersistenceError;
+  bool get hasPersistenceError => _lastPersistenceError != null;
 
   static Future<MockService> create() async {
     final service = MockService._(
@@ -1630,13 +1635,10 @@ class MockService {
     return rows.map((row) => fromJson(_jsonMap(row))).toList();
   }
 
-  void _saveAll() {
-    unawaited(_saveAllAsync().catchError((_) {}));
-  }
-
   Future<void> _saveAllAsync() async {
     await _client.siakadState.saveState(_buildStateJson());
     _markCurrentRowsPersisted();
+    _lastPersistenceError = null;
   }
 
   void _saveRows({
@@ -1675,7 +1677,10 @@ class MockService {
       }
     }
 
-    if (upserts.isEmpty && deletes.isEmpty) return;
+    if (upserts.isEmpty && deletes.isEmpty) {
+      _lastPersistenceError = null;
+      return;
+    }
 
     _saveQueue = _saveQueue.catchError((_) {}).then((_) async {
       try {
@@ -1684,12 +1689,11 @@ class MockService {
           jsonEncode(deletes),
         );
         _persistedRows = currentRows;
-      } catch (_) {
-        try {
-          await _saveAllAsync();
-        } catch (_) {
-          // Save runs in the background; keep UI responsive if the server is busy.
-        }
+        _lastPersistenceError = null;
+      } catch (error, stackTrace) {
+        _lastPersistenceError = error;
+        debugPrint('Gagal menyimpan delta SIAKAD: $error');
+        debugPrintStack(stackTrace: stackTrace);
       }
     });
     unawaited(_saveQueue.catchError((_) {}));
@@ -1725,8 +1729,13 @@ class MockService {
 
   String _saved(String message) {
     _rebuildIndexes();
-    _saveAll();
+    _saveDelta();
     return message;
+  }
+
+  void _persistChanges() {
+    _rebuildIndexes();
+    _saveDelta();
   }
 
   String _savedRows(
@@ -2430,7 +2439,7 @@ class MockService {
       materi: materi,
       waktuMulai: DateTime.now(),
     );
-    _saveAll();
+    _persistChanges();
   }
 
   void selesaikanPertemuan(String pertemuanId, {String? dosenId}) {
@@ -2449,7 +2458,7 @@ class MockService {
     }
 
     _pertemuan[index] = current.copyWith(status: StatusPertemuan.selesai);
-    _saveAll();
+    _persistChanges();
   }
 
   void simpanPresensi(
@@ -2483,7 +2492,7 @@ class MockService {
         ),
       );
     });
-    _saveAll();
+    _persistChanges();
   }
 
   String isiPresensiMahasiswa({
