@@ -21,6 +21,26 @@ class DemoAccount {
   final String role;
 }
 
+class _RowUpsert {
+  const _RowUpsert(this.tableName, this.row);
+
+  final String tableName;
+  final Map<String, Object?> row;
+}
+
+class _RowDelete {
+  const _RowDelete(this.tableName, this.id);
+
+  final String tableName;
+  final String id;
+}
+
+class _TableSnapshot {
+  const _TableSnapshot(this.rows);
+
+  final Map<String, Map<String, Object?>> rows;
+}
+
 class MockService {
   MockService._(this._client);
 
@@ -31,6 +51,8 @@ class MockService {
   static const _seedAsset = 'assets/database/siakad_seed.json';
 
   final Client _client;
+  Future<void> _saveQueue = Future.value();
+  Map<String, Map<String, String>> _persistedRows = {};
 
   static Future<MockService> create() async {
     final service = MockService._(
@@ -47,6 +69,7 @@ class MockService {
       await service._ensureFeatureDefaults();
       service._rebuildIndexes();
     }
+    service._markCurrentRowsPersisted();
     return service;
   }
 
@@ -552,20 +575,20 @@ class MockService {
     if (_mahasiswa.any((item) => item.nim == nim)) {
       throw StateError('NIM mahasiswa sudah terdaftar');
     }
-    _mahasiswa.add(
-      Mahasiswa(
-        nim: nim,
-        nama: nama,
-        jenisKelamin: jenisKelamin,
-        prodiId: prodiId,
-        password: 'password',
-        pembimbingAkademikId: pembimbingAkademikId,
-        semester: 1,
-      ),
+    final mahasiswa = Mahasiswa(
+      nim: nim,
+      nama: nama,
+      jenisKelamin: jenisKelamin,
+      prodiId: prodiId,
+      password: 'password',
+      pembimbingAkademikId: pembimbingAkademikId,
+      semester: 1,
     );
+    _mahasiswa.add(mahasiswa);
 
-    return _saved(
+    return _savedRows(
       'Mahasiswa berhasil ditambahkan (Password default: password)',
+      upserts: [_rowUpsert('mahasiswa', _mahasiswaToJson(mahasiswa))],
     );
   }
 
@@ -581,7 +604,7 @@ class MockService {
     final index = _mahasiswa.indexWhere((item) => item.nim == nim);
     if (index == -1) throw StateError('Mahasiswa tidak ditemukan');
     _ensureDosenPaValid(prodiId, pembimbingAkademikId);
-    _mahasiswa[index] = Mahasiswa(
+    final mahasiswa = Mahasiswa(
       nim: nim,
       nama: nama,
       jenisKelamin: jenisKelamin,
@@ -594,7 +617,11 @@ class MockService {
       alamat: _mahasiswa[index].alamat,
       status: _mahasiswa[index].status,
     );
-    return _saved('Mahasiswa berhasil diperbarui');
+    _mahasiswa[index] = mahasiswa;
+    return _savedRows(
+      'Mahasiswa berhasil diperbarui',
+      upserts: [_rowUpsert('mahasiswa', _mahasiswaToJson(mahasiswa))],
+    );
   }
 
   String updateProfilMahasiswa({
@@ -612,14 +639,18 @@ class MockService {
     final index = _mahasiswa.indexWhere((item) => item.nim == nim);
     if (index == -1) throw StateError('Mahasiswa tidak ditemukan');
 
-    _mahasiswa[index] = _mahasiswa[index].copyWith(
+    final mahasiswa = _mahasiswa[index].copyWith(
       jenisKelamin: jenisKelamin,
       semester: semester,
       email: email.trim(),
       noHp: noHp.trim(),
       alamat: alamat.trim(),
     );
-    return _saved('Profil berhasil diperbarui');
+    _mahasiswa[index] = mahasiswa;
+    return _savedRows(
+      'Profil berhasil diperbarui',
+      upserts: [_rowUpsert('mahasiswa', _mahasiswaToJson(mahasiswa))],
+    );
   }
 
   String deleteMahasiswa(String nim) {
@@ -628,11 +659,31 @@ class MockService {
       !_krs.any((item) => item.mahasiswaId == nim),
       'Mahasiswa tanpa KRS aktif',
     );
+    final nilaiIds = _nilai
+        .where((item) => item.mahasiswaId == nim)
+        .map((item) => item.id)
+        .toList();
+    final presensiIds = _presensi
+        .where((item) => item.mahasiswaId == nim)
+        .map((item) => item.id)
+        .toList();
+    final riwayatIds = _riwayatStatusMahasiswa
+        .where((item) => item.mahasiswaId == nim)
+        .map((item) => item.id)
+        .toList();
     _mahasiswa.removeWhere((item) => item.nim == nim);
     _nilai.removeWhere((item) => item.mahasiswaId == nim);
     _presensi.removeWhere((item) => item.mahasiswaId == nim);
     _riwayatStatusMahasiswa.removeWhere((item) => item.mahasiswaId == nim);
-    return _saved('Mahasiswa berhasil dihapus');
+    return _savedRows(
+      'Mahasiswa berhasil dihapus',
+      deletes: [
+        for (final id in nilaiIds) _RowDelete('nilai', id),
+        for (final id in presensiIds) _RowDelete('presensi', id),
+        for (final id in riwayatIds) _RowDelete('riwayat_status_mahasiswa', id),
+        _RowDelete('mahasiswa', nim),
+      ],
+    );
   }
 
   String ubahStatusMahasiswa({
@@ -661,21 +712,30 @@ class MockService {
     }
 
     final statusSebelumnya = _mahasiswa[index].status;
-    _mahasiswa[index] = _mahasiswa[index].copyWith(status: statusBaru);
-    _riwayatStatusMahasiswa.add(
-      RiwayatStatusMahasiswa(
-        id: _nextId('rsm', _riwayatStatusMahasiswa.length),
-        mahasiswaId: nim,
-        statusSebelumnya: statusSebelumnya,
-        statusBaru: statusBaru,
-        namaBukti: namaBukti.trim(),
-        tipeBukti: extension,
-        ukuranBukti: buktiBytes.length,
-        buktiBase64: base64Encode(buktiBytes),
-        diubahPada: DateTime.now(),
-      ),
+    final mahasiswa = _mahasiswa[index].copyWith(status: statusBaru);
+    final riwayat = RiwayatStatusMahasiswa(
+      id: _nextId('rsm', _riwayatStatusMahasiswa.length),
+      mahasiswaId: nim,
+      statusSebelumnya: statusSebelumnya,
+      statusBaru: statusBaru,
+      namaBukti: namaBukti.trim(),
+      tipeBukti: extension,
+      ukuranBukti: buktiBytes.length,
+      buktiBase64: base64Encode(buktiBytes),
+      diubahPada: DateTime.now(),
     );
-    return _saved('Status mahasiswa berhasil diperbarui');
+    _mahasiswa[index] = mahasiswa;
+    _riwayatStatusMahasiswa.add(riwayat);
+    return _savedRows(
+      'Status mahasiswa berhasil diperbarui',
+      upserts: [
+        _rowUpsert('mahasiswa', _mahasiswaToJson(mahasiswa)),
+        _rowUpsert(
+          'riwayat_status_mahasiswa',
+          _riwayatStatusMahasiswaToJson(riwayat),
+        ),
+      ],
+    );
   }
 
   List<RiwayatStatusMahasiswa> getRiwayatStatusMahasiswa(String nim) {
@@ -1571,11 +1631,68 @@ class MockService {
   }
 
   void _saveAll() {
-    unawaited(_saveAllAsync());
+    unawaited(_saveAllAsync().catchError((_) {}));
   }
 
-  Future<void> _saveAllAsync() {
-    return _client.siakadState.saveState(_buildStateJson());
+  Future<void> _saveAllAsync() async {
+    await _client.siakadState.saveState(_buildStateJson());
+    _markCurrentRowsPersisted();
+  }
+
+  void _saveRows({
+    List<_RowUpsert> upserts = const [],
+    List<_RowDelete> deletes = const [],
+  }) {
+    _saveDelta();
+  }
+
+  void _saveDelta() {
+    final snapshots = _tableSnapshots();
+    final currentRows = _rowHashes(snapshots);
+    final upserts = <Map<String, Object?>>[];
+    final deletes = <Map<String, Object?>>[];
+
+    for (final entry in snapshots.entries) {
+      final tableName = entry.key;
+      final currentTable = currentRows[tableName] ?? const <String, String>{};
+      final persistedTable =
+          _persistedRows[tableName] ?? const <String, String>{};
+      for (final rowEntry in entry.value.rows.entries) {
+        if (persistedTable[rowEntry.key] != currentTable[rowEntry.key]) {
+          upserts.add({'tableName': tableName, 'row': rowEntry.value});
+        }
+      }
+    }
+
+    for (final tableName in _persistedRows.keys.toList().reversed) {
+      final persistedTable =
+          _persistedRows[tableName] ?? const <String, String>{};
+      final currentTable = currentRows[tableName] ?? const <String, String>{};
+      for (final id in persistedTable.keys) {
+        if (!currentTable.containsKey(id)) {
+          deletes.add({'tableName': tableName, 'id': id});
+        }
+      }
+    }
+
+    if (upserts.isEmpty && deletes.isEmpty) return;
+
+    _saveQueue = _saveQueue.catchError((_) {}).then((_) async {
+      try {
+        await _client.siakadState.applyRowChanges(
+          jsonEncode(upserts),
+          jsonEncode(deletes),
+        );
+        _persistedRows = currentRows;
+      } catch (_) {
+        try {
+          await _saveAllAsync();
+        } catch (_) {
+          // Save runs in the background; keep UI responsive if the server is busy.
+        }
+      }
+    });
+    unawaited(_saveQueue.catchError((_) {}));
   }
 
   String _buildStateJson() {
@@ -1612,11 +1729,103 @@ class MockService {
     return message;
   }
 
+  String _savedRows(
+    String message, {
+    List<_RowUpsert> upserts = const [],
+    List<_RowDelete> deletes = const [],
+  }) {
+    _rebuildIndexes();
+    _saveRows(upserts: upserts, deletes: deletes);
+    return message;
+  }
+
+  _RowUpsert _rowUpsert(String tableName, Map<String, Object?> row) {
+    return _RowUpsert(tableName, row);
+  }
+
+  void _markCurrentRowsPersisted() {
+    _persistedRows = _rowHashes(_tableSnapshots());
+  }
+
+  Map<String, Map<String, String>> _rowHashes(
+    Map<String, _TableSnapshot> snapshots,
+  ) {
+    return {
+      for (final table in snapshots.entries)
+        table.key: {
+          for (final row in table.value.rows.entries)
+            row.key: jsonEncode(row.value),
+        },
+    };
+  }
+
+  Map<String, _TableSnapshot> _tableSnapshots() {
+    Map<String, Map<String, Object?>> rows<T>(
+      Iterable<T> items,
+      String Function(T item) idOf,
+      Map<String, Object?> Function(T item) jsonOf,
+    ) {
+      return {for (final item in items) idOf(item): jsonOf(item)};
+    }
+
+    return {
+      'siakad_users': _TableSnapshot(
+        rows(_users, (item) => item.id, _userToJson),
+      ),
+      'fakultas': _TableSnapshot(
+        rows(_fakultas, (item) => item.id, _fakultasToJson),
+      ),
+      'prodi': _TableSnapshot(rows(_prodi, (item) => item.id, _prodiToJson)),
+      'tahun_ajaran': _TableSnapshot(
+        rows(_tahunAjaran, (item) => item.id, _tahunAjaranToJson),
+      ),
+      'fase_krs': _TableSnapshot(
+        rows(_faseKrs, (item) => item.tahunAjaranId, _faseKrsToJson),
+      ),
+      'mahasiswa': _TableSnapshot(
+        rows(_mahasiswa, (item) => item.nim, _mahasiswaToJson),
+      ),
+      'riwayat_status_mahasiswa': _TableSnapshot(
+        rows(
+          _riwayatStatusMahasiswa,
+          (item) => item.id,
+          _riwayatStatusMahasiswaToJson,
+        ),
+      ),
+      'dosen': _TableSnapshot(rows(_dosen, (item) => item.nidn, _dosenToJson)),
+      'mata_kuliah': _TableSnapshot(
+        rows(_mataKuliah, (item) => item.kode, _mataKuliahToJson),
+      ),
+      'ruangan': _TableSnapshot(
+        rows(_ruangan, (item) => item.kodeRuangan, _ruanganToJson),
+      ),
+      'kelas': _TableSnapshot(rows(_kelas, (item) => item.id, _kelasToJson)),
+      'dosen_pengajar': _TableSnapshot(
+        rows(_dosenPengajar, (item) => item.id, _dosenPengajarToJson),
+      ),
+      'krs': _TableSnapshot(rows(_krs, (item) => item.id, _krsToJson)),
+      'nilai': _TableSnapshot(rows(_nilai, (item) => item.id, _nilaiToJson)),
+      'tugas': _TableSnapshot(rows(_tugas, (item) => item.id, _tugasToJson)),
+      'skripsi': _TableSnapshot(
+        rows(_skripsi, (item) => item.id, _skripsiToJson),
+      ),
+      'magang': _TableSnapshot(rows(_magang, (item) => item.id, _magangToJson)),
+      'kkn': _TableSnapshot(rows(_kkn, (item) => item.id, _kknToJson)),
+      'pertemuan': _TableSnapshot(
+        rows(_pertemuan, (item) => item.id, _pertemuanToJson),
+      ),
+      'presensi': _TableSnapshot(
+        rows(_presensi, (item) => item.id, _presensiToJson),
+      ),
+      'presensi_dosen': _TableSnapshot(
+        rows(_presensiDosen, (item) => item.id, _presensiDosenToJson),
+      ),
+    };
+  }
+
   Map<String, dynamic> _jsonMap(Object? value) {
     return Map<String, dynamic>.from(value as Map);
   }
-
-  int _boolToInt(bool value) => value ? 1 : 0;
 
   bool _boolFromJson(Object? value) {
     if (value is bool) return value;
@@ -1693,7 +1902,7 @@ class MockService {
     'semester': item.semester.name,
     'tanggalMulai': item.tanggalMulai.toIso8601String(),
     'tanggalSelesai': item.tanggalSelesai.toIso8601String(),
-    'aktif': _boolToInt(item.aktif),
+    'aktif': item.aktif,
   };
 
   TahunAjaran _tahunAjaranFromJson(Map<String, dynamic> json) => TahunAjaran(
@@ -1709,7 +1918,7 @@ class MockService {
     'tahunAjaranId': item.tahunAjaranId,
     'mulai': item.mulai.toIso8601String(),
     'berakhir': item.berakhir.toIso8601String(),
-    'aktif': _boolToInt(item.aktif),
+    'aktif': item.aktif,
   };
 
   FaseKrs _faseKrsFromJson(Map<String, dynamic> json) => FaseKrs(
@@ -1872,9 +2081,9 @@ class MockService {
     'mahasiswaId': item.mahasiswaId,
     'kelasId': item.kelasId,
     'semester': item.semester,
-    'isSubmitted': _boolToInt(item.isSubmitted),
-    'isValidated': _boolToInt(item.isValidated),
-    'isRejected': _boolToInt(item.isRejected),
+    'isSubmitted': item.isSubmitted,
+    'isValidated': item.isValidated,
+    'isRejected': item.isRejected,
     'catatanDosenPa': item.catatanDosenPa,
     'tahunAjaranId': item.tahunAjaranId,
   };

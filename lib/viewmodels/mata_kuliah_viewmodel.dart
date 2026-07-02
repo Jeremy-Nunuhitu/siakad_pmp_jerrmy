@@ -14,6 +14,28 @@ class MataKuliahViewModel extends BaseListViewModel {
         .toList();
   }
 
+  PagedResult<MataKuliah> pagedItems({
+    String? prodiId,
+    int page = 0,
+    int pageSize = BaseListViewModel.defaultPageSize,
+    String query = '',
+    String Function(MataKuliah item)? searchableText,
+    Comparator<MataKuliah>? sortBy,
+    bool descending = false,
+  }) {
+    return paginate(
+      _service.mataKuliah.where(
+        (item) => prodiId == null || item.prodiId == prodiId,
+      ),
+      page: page,
+      pageSize: pageSize,
+      query: query,
+      searchableText: searchableText,
+      sortBy: sortBy,
+      descending: descending,
+    );
+  }
+
   MataKuliah? byKode(String kode) {
     // Kode mata kuliah menjadi kunci relasi antara MK dan kelas.
     for (final item in _service.mataKuliah) {

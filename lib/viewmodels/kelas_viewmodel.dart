@@ -10,6 +10,31 @@ class KelasViewModel extends BaseListViewModel {
   List<Kelas> items({String? prodiId, String? dosenId}) {
     // Kelas bisa dilihat dari dua sudut: prodi untuk operator,
     // atau dosenId untuk dashboard dosen.
+    return _filteredItems(prodiId: prodiId, dosenId: dosenId).toList();
+  }
+
+  PagedResult<Kelas> pagedItems({
+    String? prodiId,
+    String? dosenId,
+    int page = 0,
+    int pageSize = BaseListViewModel.defaultPageSize,
+    String query = '',
+    String Function(Kelas item)? searchableText,
+    Comparator<Kelas>? sortBy,
+    bool descending = false,
+  }) {
+    return paginate(
+      _filteredItems(prodiId: prodiId, dosenId: dosenId),
+      page: page,
+      pageSize: pageSize,
+      query: query,
+      searchableText: searchableText,
+      sortBy: sortBy,
+      descending: descending,
+    );
+  }
+
+  Iterable<Kelas> _filteredItems({String? prodiId, String? dosenId}) {
     return _service.kelas.where((kelas) {
       final mk = _service.mataKuliah.firstWhere(
         (item) => item.kode == kelas.mataKuliahId,
@@ -18,7 +43,7 @@ class KelasViewModel extends BaseListViewModel {
       final matchDosen =
           dosenId == null || _service.isDosenMengajarKelas(dosenId, kelas.id);
       return matchProdi && matchDosen;
-    }).toList();
+    });
   }
 
   Kelas? byId(String id) {

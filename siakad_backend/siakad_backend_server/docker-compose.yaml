@@ -7,7 +7,7 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_DB: siakad_backend
-      POSTGRES_PASSWORD: "v0-pqagO_xHp0kt-HWNBmfm1jTSSY-ZK"
+      POSTGRES_PASSWORD: "${SIAKAD_DB_PASSWORD:-v0-pqagO_xHp0kt-HWNBmfm1jTSSY-ZK}"
     volumes:
       - siakad_backend_data:/var/lib/postgresql/data
 
@@ -15,7 +15,7 @@ services:
     image: redis:6.2.6
     ports:
       - "8091:6379"
-    command: redis-server --requirepass "if14zyO0wmG888VAqkUorg_TEn9O6CJX"
+    command: redis-server --requirepass "${SIAKAD_REDIS_PASSWORD:-if14zyO0wmG888VAqkUorg_TEn9O6CJX}"
     environment:
       - REDIS_REPLICATION_MODE=master
 
@@ -27,7 +27,7 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_DB: siakad_backend_test
-      POSTGRES_PASSWORD: "5kfw07RmdnLAvBdBuQrujz1FtvmJpS0e"
+      POSTGRES_PASSWORD: "${SIAKAD_TEST_DB_PASSWORD:-5kfw07RmdnLAvBdBuQrujz1FtvmJpS0e}"
     volumes:
       - siakad_backend_test_data:/var/lib/postgresql/data
 
@@ -35,7 +35,7 @@ services:
     image: redis:6.2.6
     ports:
       - "9091:6379"
-    command: redis-server --requirepass "xbRU67uPbYJalxAEhDULdc6gKL302Jz9"
+    command: redis-server --requirepass "${SIAKAD_TEST_REDIS_PASSWORD:-xbRU67uPbYJalxAEhDULdc6gKL302Jz9}"
     environment:
       - REDIS_REPLICATION_MODE=master
 

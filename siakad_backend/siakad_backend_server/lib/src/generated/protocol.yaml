@@ -14,3 +14,8 @@ greeting:
 siakadState:
   - getState:
   - saveState:
+  - listRows:
+  - getRow:
+  - upsertRow:
+  - applyRowChanges:
+  - deleteRow:

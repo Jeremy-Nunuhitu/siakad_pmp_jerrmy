@@ -7,5 +7,3 @@ environment:
 workspace:
   - siakad_backend_client
   - siakad_backend_server
-  - siakad_backend_flutter
-

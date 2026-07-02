@@ -278,17 +278,79 @@ class EndpointSiakadState extends _i2.EndpointRef {
         'saveState',
         {'stateJson': stateJson},
       );
+
+  _i3.Future<String> listRows(
+    String tableName, {
+    required int limit,
+    required int offset,
+  }) => caller.callServerEndpoint<String>(
+    'siakadState',
+    'listRows',
+    {
+      'tableName': tableName,
+      'limit': limit,
+      'offset': offset,
+    },
+  );
+
+  _i3.Future<String?> getRow(
+    String tableName,
+    String id,
+  ) => caller.callServerEndpoint<String?>(
+    'siakadState',
+    'getRow',
+    {
+      'tableName': tableName,
+      'id': id,
+    },
+  );
+
+  _i3.Future<void> upsertRow(
+    String tableName,
+    String rowJson,
+  ) => caller.callServerEndpoint<void>(
+    'siakadState',
+    'upsertRow',
+    {
+      'tableName': tableName,
+      'rowJson': rowJson,
+    },
+  );
+
+  _i3.Future<void> applyRowChanges(
+    String upsertsJson,
+    String deletesJson,
+  ) => caller.callServerEndpoint<void>(
+    'siakadState',
+    'applyRowChanges',
+    {
+      'upsertsJson': upsertsJson,
+      'deletesJson': deletesJson,
+    },
+  );
+
+  _i3.Future<void> deleteRow(
+    String tableName,
+    String id,
+  ) => caller.callServerEndpoint<void>(
+    'siakadState',
+    'deleteRow',
+    {
+      'tableName': tableName,
+      'id': id,
+    },
+  );
 }
 
 class Modules {
   Modules(Client client) {
-    serverpod_auth_idp = _i1.Caller(client);
     serverpod_auth_core = _i4.Caller(client);
+    serverpod_auth_idp = _i1.Caller(client);
   }
 
-  late final _i1.Caller serverpod_auth_idp;
-
   late final _i4.Caller serverpod_auth_core;
+
+  late final _i1.Caller serverpod_auth_idp;
 }
 
 class Client extends _i2.ServerpodClientShared {
@@ -347,7 +409,7 @@ class Client extends _i2.ServerpodClientShared {
 
   @override
   Map<String, _i2.ModuleEndpointCaller> get moduleLookup => {
-    'serverpod_auth_idp': modules.serverpod_auth_idp,
     'serverpod_auth_core': modules.serverpod_auth_core,
+    'serverpod_auth_idp': modules.serverpod_auth_idp,
   };
 }

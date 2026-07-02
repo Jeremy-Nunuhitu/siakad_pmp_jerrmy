@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../models/siakad_models.dart';
 import '../services/mock_service.dart';
 import '../utils/app_helpers.dart';
+import '../viewmodels/base_list_viewmodel.dart';
 import '../viewmodels/dosen_viewmodel.dart';
 import '../viewmodels/fakultas_viewmodel.dart';
 import '../viewmodels/kelas_viewmodel.dart';
@@ -500,11 +501,20 @@ class MahasiswaManagementView extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _SearchableList<Mahasiswa>(
-            items: mahasiswaVm.items(prodiId: prodiId),
+          _PagedSearchableList<Mahasiswa>(
+            pageLoader: (query, page, pageSize, sortMode) => mahasiswaVm.pagedItems(
+              prodiId: prodiId,
+              page: page,
+              pageSize: pageSize,
+              query: query,
+              searchableText: (item) =>
+                  '${item.nama} ${item.nim} ${item.jenisKelamin} ${service.getDosenName(item.pembimbingAkademikId)}',
+              sortBy: sortMode == _DataSortMode.alphabet
+                  ? (first, second) => _compareText(first.nama, second.nama)
+                  : null,
+              descending: sortMode == _DataSortMode.newest,
+            ),
             hintText: 'Cari nama, NIM, jenis kelamin, atau dosen PA',
-            searchableText: (item) =>
-                '${item.nama} ${item.nim} ${item.jenisKelamin} ${service.getDosenName(item.pembimbingAkademikId)}',
             itemBuilder: (context, item, index) => InfoTile(
               icon: Icons.groups_outlined,
               title: item.nama,
@@ -531,7 +541,6 @@ class StatusMahasiswaManagementView extends StatelessWidget {
   Widget build(BuildContext context) {
     final mahasiswaVm = context.watch<MahasiswaViewModel>();
     final service = context.read<MockService>();
-    final mahasiswa = mahasiswaVm.items(prodiId: prodiId);
 
     return AppScaffold(
       title: 'Kelola Status Mahasiswa',
@@ -548,11 +557,21 @@ class StatusMahasiswaManagementView extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          _SearchableList<Mahasiswa>(
-            items: mahasiswa,
+          _PagedSearchableList<Mahasiswa>(
+            pageLoader: (query, page, pageSize, sortMode) =>
+                mahasiswaVm.pagedItems(
+                  prodiId: prodiId,
+                  page: page,
+                  pageSize: pageSize,
+                  query: query,
+                  searchableText: (item) =>
+                      '${item.nama} ${item.nim} ${item.status.label}',
+                  sortBy: sortMode == _DataSortMode.alphabet
+                      ? (first, second) => _compareText(first.nama, second.nama)
+                      : null,
+                  descending: sortMode == _DataSortMode.newest,
+                ),
             hintText: 'Cari nama, NIM, atau status mahasiswa',
-            searchableText: (item) =>
-                '${item.nama} ${item.nim} ${item.status.label}',
             itemBuilder: (context, item, index) => InfoTile(
               icon: Icons.manage_accounts_outlined,
               title: item.nama,
@@ -798,11 +817,20 @@ class DosenManagementView extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _SearchableList<Dosen>(
-            items: dosenVm.items(prodiId: prodiId),
+          _PagedSearchableList<Dosen>(
+            pageLoader: (query, page, pageSize, sortMode) => dosenVm.pagedItems(
+              prodiId: prodiId,
+              page: page,
+              pageSize: pageSize,
+              query: query,
+              searchableText: (item) =>
+                  '${item.nama} ${item.nidn} ${item.email} ${item.noHp} ${item.keahlian}',
+              sortBy: sortMode == _DataSortMode.alphabet
+                  ? (first, second) => _compareText(first.nama, second.nama)
+                  : null,
+              descending: sortMode == _DataSortMode.newest,
+            ),
             hintText: 'Cari nama, NIDN, email, atau keahlian',
-            searchableText: (item) =>
-                '${item.nama} ${item.nidn} ${item.email} ${item.noHp} ${item.keahlian}',
             itemBuilder: (context, item, index) => InfoTile(
               icon: Icons.co_present_outlined,
               title: item.nama,
@@ -838,10 +866,19 @@ class MataKuliahManagementView extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _SearchableList<MataKuliah>(
-            items: mkVm.items(prodiId: prodiId),
+          _PagedSearchableList<MataKuliah>(
+            pageLoader: (query, page, pageSize, sortMode) => mkVm.pagedItems(
+              prodiId: prodiId,
+              page: page,
+              pageSize: pageSize,
+              query: query,
+              searchableText: (item) => '${item.kode} ${item.nama} ${item.sks}',
+              sortBy: sortMode == _DataSortMode.alphabet
+                  ? (first, second) => _compareText(first.nama, second.nama)
+                  : null,
+              descending: sortMode == _DataSortMode.newest,
+            ),
             hintText: 'Cari kode, nama mata kuliah, atau jumlah SKS',
-            searchableText: (item) => '${item.kode} ${item.nama} ${item.sks}',
             itemBuilder: (context, item, index) => InfoTile(
               icon: Icons.menu_book_outlined,
               title: item.nama,
@@ -875,11 +912,20 @@ class RuanganManagementView extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _SearchableList<Ruangan>(
-            items: ruanganVm.items,
+          _PagedSearchableList<Ruangan>(
+            pageLoader: (query, page, pageSize, sortMode) => ruanganVm.pagedItems(
+              page: page,
+              pageSize: pageSize,
+              query: query,
+              searchableText: (item) =>
+                  '${item.kodeRuangan} ${item.namaRuangan} ${item.kapasitasRuangan} ${item.lokasi}',
+              sortBy: sortMode == _DataSortMode.alphabet
+                  ? (first, second) =>
+                        _compareText(first.namaRuangan, second.namaRuangan)
+                  : null,
+              descending: sortMode == _DataSortMode.newest,
+            ),
             hintText: 'Cari kode, nama ruangan, kapasitas, atau lokasi',
-            searchableText: (item) =>
-                '${item.kodeRuangan} ${item.namaRuangan} ${item.kapasitasRuangan} ${item.lokasi}',
             itemBuilder: (context, item, index) => InfoTile(
               icon: Icons.meeting_room_outlined,
               title: '${item.kodeRuangan} - ${item.namaRuangan}',
@@ -907,7 +953,6 @@ class KelasManagementView extends StatelessWidget {
     // jadwal, dan ruangan yang sudah dikelola di menu Ruangan.
     final kelasVm = context.watch<KelasViewModel>();
     final service = context.watch<MockService>();
-    final kelas = kelasVm.items(prodiId: prodiId);
 
     return AppScaffold(
       title: 'Kelola Kelas Kuliah',
@@ -919,11 +964,20 @@ class KelasManagementView extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _SearchableList<Kelas>(
-            items: kelas,
+          _PagedSearchableList<Kelas>(
+            pageLoader: (query, page, pageSize, sortMode) => kelasVm.pagedItems(
+              prodiId: prodiId,
+              page: page,
+              pageSize: pageSize,
+              query: query,
+              searchableText: (item) =>
+                  '${item.id} ${service.getMataKuliahName(item.mataKuliahId)} ${service.getDosenPengajarNames(item.id)} ${item.hari} ${item.jam} ${service.getRuanganName(item.ruangan)}',
+              sortBy: sortMode == _DataSortMode.alphabet
+                  ? (first, second) => _compareText(first.id, second.id)
+                  : null,
+              descending: sortMode == _DataSortMode.newest,
+            ),
             hintText: 'Cari ID, mata kuliah, dosen, hari, jam, atau ruangan',
-            searchableText: (item) =>
-                '${item.id} ${service.getMataKuliahName(item.mataKuliahId)} ${service.getDosenPengajarNames(item.id)} ${item.hari} ${item.jam} ${service.getRuanganName(item.ruangan)}',
             itemBuilder: (context, item, index) => AnimatedEntrance(
               delay: Duration(milliseconds: index * 80),
               child: InfoTile(
@@ -1224,6 +1278,221 @@ class _SearchableListState<T> extends State<_SearchableList<T>> {
   }
 
   String _normalize(String value) => value.toLowerCase().trim();
+}
+
+enum _DataSortMode {
+  newest('Terbaru'),
+  oldest('Terlama'),
+  alphabet('Alfabet');
+
+  const _DataSortMode(this.label);
+
+  final String label;
+}
+
+typedef _PagedLoader<T> =
+    PagedResult<T> Function(
+      String query,
+      int page,
+      int pageSize,
+      _DataSortMode sortMode,
+    );
+
+int _compareText(String first, String second) {
+  return first.toLowerCase().compareTo(second.toLowerCase());
+}
+
+class _PagedSearchableList<T> extends StatefulWidget {
+  const _PagedSearchableList({
+    required this.pageLoader,
+    required this.itemBuilder,
+    required this.hintText,
+    this.pageSize = BaseListViewModel.defaultPageSize,
+  });
+
+  final _PagedLoader<T> pageLoader;
+  final Widget Function(BuildContext context, T item, int index) itemBuilder;
+  final String hintText;
+  final int pageSize;
+
+  @override
+  State<_PagedSearchableList<T>> createState() =>
+      _PagedSearchableListState<T>();
+}
+
+class _PagedSearchableListState<T> extends State<_PagedSearchableList<T>> {
+  final TextEditingController _controller = TextEditingController();
+  String _query = '';
+  int _page = 0;
+  _DataSortMode _sortMode = _DataSortMode.newest;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final result = widget.pageLoader(_query, _page, widget.pageSize, _sortMode);
+    if (result.items.isEmpty && result.hasPrevious) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _page--);
+      });
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _PagedListToolbar(
+          searchField: _SearchField(
+            controller: _controller,
+            hintText: widget.hintText,
+            onChanged: (value) => setState(() {
+              _query = value;
+              _page = 0;
+            }),
+            onClear: _query.isEmpty
+                ? null
+                : () {
+                    _controller.clear();
+                    setState(() {
+                      _query = '';
+                      _page = 0;
+                    });
+                  },
+          ),
+          sortMode: _sortMode,
+          onSortChanged: (value) => setState(() {
+            _sortMode = value;
+            _page = 0;
+          }),
+        ),
+        const SizedBox(height: 14),
+        if (result.items.isEmpty)
+          _EmptySearchResult(query: _query)
+        else ...[
+          for (int i = 0; i < result.items.length; i++)
+            widget.itemBuilder(context, result.items[i], i),
+          const SizedBox(height: 8),
+          _PaginationBar(
+            page: result.page,
+            pageSize: result.pageSize,
+            itemCount: result.items.length,
+            hasPrevious: result.hasPrevious,
+            hasNext: result.hasNext,
+            onPrevious: () => setState(() => _page--),
+            onNext: () => setState(() => _page++),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _PagedListToolbar extends StatelessWidget {
+  const _PagedListToolbar({
+    required this.searchField,
+    required this.sortMode,
+    required this.onSortChanged,
+  });
+
+  final Widget searchField;
+  final _DataSortMode sortMode;
+  final ValueChanged<_DataSortMode> onSortChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final sortField = SizedBox(
+      width: 190,
+      child: DropdownButtonFormField<_DataSortMode>(
+        initialValue: sortMode,
+        decoration: const InputDecoration(
+          labelText: 'Urutkan',
+          prefixIcon: Icon(Icons.sort_rounded),
+        ),
+        items: [
+          for (final mode in _DataSortMode.values)
+            DropdownMenuItem(value: mode, child: Text(mode.label)),
+        ],
+        onChanged: (value) {
+          if (value != null) onSortChanged(value);
+        },
+      ),
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 620) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [searchField, const SizedBox(height: 10), sortField],
+          );
+        }
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: searchField),
+            const SizedBox(width: 12),
+            sortField,
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _PaginationBar extends StatelessWidget {
+  const _PaginationBar({
+    required this.page,
+    required this.pageSize,
+    required this.itemCount,
+    required this.hasPrevious,
+    required this.hasNext,
+    required this.onPrevious,
+    required this.onNext,
+  });
+
+  final int page;
+  final int pageSize;
+  final int itemCount;
+  final bool hasPrevious;
+  final bool hasNext;
+  final VoidCallback onPrevious;
+  final VoidCallback onNext;
+
+  @override
+  Widget build(BuildContext context) {
+    final textStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
+      fontWeight: FontWeight.w700,
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
+    );
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(0, 4, 0, 96),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              'Halaman ${page + 1} - $itemCount dari maks. $pageSize data',
+              style: textStyle,
+            ),
+          ),
+          IconButton(
+            tooltip: 'Halaman sebelumnya',
+            onPressed: hasPrevious ? onPrevious : null,
+            icon: const Icon(Icons.chevron_left_rounded),
+          ),
+          IconButton(
+            tooltip: 'Halaman berikutnya',
+            onPressed: hasNext ? onNext : null,
+            icon: const Icon(Icons.chevron_right_rounded),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _SearchField extends StatelessWidget {

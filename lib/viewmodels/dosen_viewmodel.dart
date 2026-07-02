@@ -14,6 +14,28 @@ class DosenViewModel extends BaseListViewModel {
         .toList();
   }
 
+  PagedResult<Dosen> pagedItems({
+    String? prodiId,
+    int page = 0,
+    int pageSize = BaseListViewModel.defaultPageSize,
+    String query = '',
+    String Function(Dosen item)? searchableText,
+    Comparator<Dosen>? sortBy,
+    bool descending = false,
+  }) {
+    return paginate(
+      _service.dosen.where(
+        (item) => prodiId == null || item.prodiId == prodiId,
+      ),
+      page: page,
+      pageSize: pageSize,
+      query: query,
+      searchableText: searchableText,
+      sortBy: sortBy,
+      descending: descending,
+    );
+  }
+
   Dosen? byId(String nidn) {
     // NIDN menjadi identifier utama dosen di seluruh relasi kelas.
     for (final item in _service.dosen) {

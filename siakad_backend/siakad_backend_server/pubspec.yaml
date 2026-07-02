@@ -10,6 +10,7 @@ resolution: workspace
 
 dependencies:
   serverpod: 3.4.10
+  serverpod_auth_core_server: 3.4.10
   serverpod_auth_idp_server: 3.4.10
 
 dev_dependencies:
@@ -22,15 +23,15 @@ serverpod:
     # Starts the server and applies migrations
     start: dart bin/main.dart --apply-migrations
 
-    # Build the Flutter web app and copy it to the server's web directory.
+    # Build the root Flutter app and copy it to the server's web directory.
     # Windows uses xcopy since flutter's --output flag doesn't work there.
     # See: https://github.com/flutter/flutter/issues/157886
     flutter_build:
       windows: >-
         (if exist web\app rmdir /S /Q web\app)
-        & cd /D ..\siakad_backend_flutter
-        && flutter build web --base-href /app/ --wasm
-        && xcopy /E /I /Y build\web ..\siakad_backend_server\web\app
+        & cd /D ..\..
+        && flutter build web --base-href /app/ --wasm --dart-define=SIAKAD_API_URL=http://localhost:8080/
+        && xcopy /E /I /Y build\web siakad_backend\siakad_backend_server\web\app
       posix: |
-        cd ../siakad_backend_flutter
-        flutter build web --base-href /app/ --wasm --output ../siakad_backend_server/web/app
+        cd ../..
+        flutter build web --base-href /app/ --wasm --dart-define=SIAKAD_API_URL=http://localhost:8080/ --output siakad_backend/siakad_backend_server/web/app

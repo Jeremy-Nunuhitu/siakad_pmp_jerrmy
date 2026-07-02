@@ -5,16 +5,35 @@ import 'base_list_viewmodel.dart';
 class MahasiswaViewModel extends BaseListViewModel {
   MahasiswaViewModel(this._service);
 
-  static const defaultWindowSize = 500;
-
   final MockService _service;
 
   List<Mahasiswa> items({String? prodiId}) {
     // Daftar mahasiswa bisa difilter per prodi sesuai scope operator.
     return _service.mahasiswa
         .where((item) => prodiId == null || item.prodiId == prodiId)
-        .take(prodiId == null ? defaultWindowSize : 1000)
         .toList();
+  }
+
+  PagedResult<Mahasiswa> pagedItems({
+    String? prodiId,
+    int page = 0,
+    int pageSize = BaseListViewModel.defaultPageSize,
+    String query = '',
+    String Function(Mahasiswa item)? searchableText,
+    Comparator<Mahasiswa>? sortBy,
+    bool descending = false,
+  }) {
+    return paginate(
+      _service.mahasiswa.where(
+        (item) => prodiId == null || item.prodiId == prodiId,
+      ),
+      page: page,
+      pageSize: pageSize,
+      query: query,
+      searchableText: searchableText,
+      sortBy: sortBy,
+      descending: descending,
+    );
   }
 
   Mahasiswa? byNim(String nim) {

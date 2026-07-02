@@ -15,9 +15,9 @@ import '../auth/email_idp_endpoint.dart' as _i2;
 import '../auth/jwt_refresh_endpoint.dart' as _i3;
 import '../greetings/greeting_endpoint.dart' as _i4;
 import '../siakad/siakad_state_endpoint.dart' as _i5;
-import 'package:serverpod_auth_idp_server/serverpod_auth_idp_server.dart'
-    as _i6;
 import 'package:serverpod_auth_core_server/serverpod_auth_core_server.dart'
+    as _i6;
+import 'package:serverpod_auth_idp_server/serverpod_auth_idp_server.dart'
     as _i7;
 
 class Endpoints extends _i1.EndpointDispatch {
@@ -310,11 +310,142 @@ class Endpoints extends _i1.EndpointDispatch {
                     params['stateJson'],
                   ),
         ),
+        'listRows': _i1.MethodConnector(
+          name: 'listRows',
+          params: {
+            'tableName': _i1.ParameterDescription(
+              name: 'tableName',
+              type: _i1.getType<String>(),
+              nullable: false,
+            ),
+            'limit': _i1.ParameterDescription(
+              name: 'limit',
+              type: _i1.getType<int>(),
+              nullable: false,
+            ),
+            'offset': _i1.ParameterDescription(
+              name: 'offset',
+              type: _i1.getType<int>(),
+              nullable: false,
+            ),
+          },
+          call:
+              (
+                _i1.Session session,
+                Map<String, dynamic> params,
+              ) async => (endpoints['siakadState'] as _i5.SiakadStateEndpoint)
+                  .listRows(
+                    session,
+                    params['tableName'],
+                    limit: params['limit'],
+                    offset: params['offset'],
+                  ),
+        ),
+        'getRow': _i1.MethodConnector(
+          name: 'getRow',
+          params: {
+            'tableName': _i1.ParameterDescription(
+              name: 'tableName',
+              type: _i1.getType<String>(),
+              nullable: false,
+            ),
+            'id': _i1.ParameterDescription(
+              name: 'id',
+              type: _i1.getType<String>(),
+              nullable: false,
+            ),
+          },
+          call:
+              (
+                _i1.Session session,
+                Map<String, dynamic> params,
+              ) async =>
+                  (endpoints['siakadState'] as _i5.SiakadStateEndpoint).getRow(
+                    session,
+                    params['tableName'],
+                    params['id'],
+                  ),
+        ),
+        'upsertRow': _i1.MethodConnector(
+          name: 'upsertRow',
+          params: {
+            'tableName': _i1.ParameterDescription(
+              name: 'tableName',
+              type: _i1.getType<String>(),
+              nullable: false,
+            ),
+            'rowJson': _i1.ParameterDescription(
+              name: 'rowJson',
+              type: _i1.getType<String>(),
+              nullable: false,
+            ),
+          },
+          call:
+              (
+                _i1.Session session,
+                Map<String, dynamic> params,
+              ) async => (endpoints['siakadState'] as _i5.SiakadStateEndpoint)
+                  .upsertRow(
+                    session,
+                    params['tableName'],
+                    params['rowJson'],
+                  ),
+        ),
+        'applyRowChanges': _i1.MethodConnector(
+          name: 'applyRowChanges',
+          params: {
+            'upsertsJson': _i1.ParameterDescription(
+              name: 'upsertsJson',
+              type: _i1.getType<String>(),
+              nullable: false,
+            ),
+            'deletesJson': _i1.ParameterDescription(
+              name: 'deletesJson',
+              type: _i1.getType<String>(),
+              nullable: false,
+            ),
+          },
+          call:
+              (
+                _i1.Session session,
+                Map<String, dynamic> params,
+              ) async => (endpoints['siakadState'] as _i5.SiakadStateEndpoint)
+                  .applyRowChanges(
+                    session,
+                    params['upsertsJson'],
+                    params['deletesJson'],
+                  ),
+        ),
+        'deleteRow': _i1.MethodConnector(
+          name: 'deleteRow',
+          params: {
+            'tableName': _i1.ParameterDescription(
+              name: 'tableName',
+              type: _i1.getType<String>(),
+              nullable: false,
+            ),
+            'id': _i1.ParameterDescription(
+              name: 'id',
+              type: _i1.getType<String>(),
+              nullable: false,
+            ),
+          },
+          call:
+              (
+                _i1.Session session,
+                Map<String, dynamic> params,
+              ) async => (endpoints['siakadState'] as _i5.SiakadStateEndpoint)
+                  .deleteRow(
+                    session,
+                    params['tableName'],
+                    params['id'],
+                  ),
+        ),
       },
     );
-    modules['serverpod_auth_idp'] = _i6.Endpoints()
+    modules['serverpod_auth_core'] = _i6.Endpoints()
       ..initializeEndpoints(server);
-    modules['serverpod_auth_core'] = _i7.Endpoints()
+    modules['serverpod_auth_idp'] = _i7.Endpoints()
       ..initializeEndpoints(server);
   }
 }

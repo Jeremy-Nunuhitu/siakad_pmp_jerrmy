@@ -237,7 +237,7 @@ class _BrandPanel extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             Text(
-              'SIAKAD Jeremy Nunuhitu',
+              'SIAKAD Faiz Abdul Majid',
               style: textTheme.displaySmall?.copyWith(
                 fontWeight: FontWeight.w900,
                 letterSpacing: 0,

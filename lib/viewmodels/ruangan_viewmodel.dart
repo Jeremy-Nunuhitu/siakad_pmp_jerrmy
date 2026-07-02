@@ -9,6 +9,25 @@ class RuanganViewModel extends BaseListViewModel {
 
   List<Ruangan> get items => _service.ruangan;
 
+  PagedResult<Ruangan> pagedItems({
+    int page = 0,
+    int pageSize = BaseListViewModel.defaultPageSize,
+    String query = '',
+    String Function(Ruangan item)? searchableText,
+    Comparator<Ruangan>? sortBy,
+    bool descending = false,
+  }) {
+    return paginate(
+      _service.ruangan,
+      page: page,
+      pageSize: pageSize,
+      query: query,
+      searchableText: searchableText,
+      sortBy: sortBy,
+      descending: descending,
+    );
+  }
+
   void add({
     required String kodeRuangan,
     required String namaRuangan,
