@@ -16,8 +16,8 @@ class LoginView extends StatefulWidget {
 
 class _LoginViewState extends State<LoginView> {
   final _formKey = GlobalKey<FormState>();
-  final _username = TextEditingController(text: '2406080046');
-  final _password = TextEditingController(text: 'password');
+  final _username = TextEditingController();
+  final _password = TextEditingController();
   bool _hidePassword = true;
 
   @override
@@ -237,7 +237,7 @@ class _BrandPanel extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             Text(
-              'SIAKAD Faiz Abdul Majid',
+              'SIAKAD Jeremy Nunuhitu',
               style: textTheme.displaySmall?.copyWith(
                 fontWeight: FontWeight.w900,
                 letterSpacing: 0,
@@ -501,18 +501,6 @@ class _LoginCard extends StatelessWidget {
                     ? 'Password minimal 1 karakter'
                     : null,
               ),
-              const SizedBox(height: 10),
-              Align(
-                alignment: Alignment.centerRight,
-                child: Text(
-                  'Gunakan password: password',
-                  style: TextStyle(
-                    color: scheme.onSurface.withValues(alpha: 0.56),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
               const SizedBox(height: 20),
               FilledButton.icon(
                 onPressed: onLogin,
@@ -537,10 +525,17 @@ class _LoginCard extends StatelessWidget {
   }
 }
 
-class _TestingAccountsCard extends StatelessWidget {
+class _TestingAccountsCard extends StatefulWidget {
   const _TestingAccountsCard({required this.onUseAccount});
 
   final ValueChanged<_AccountInfo> onUseAccount;
+
+  @override
+  State<_TestingAccountsCard> createState() => _TestingAccountsCardState();
+}
+
+class _TestingAccountsCardState extends State<_TestingAccountsCard> {
+  bool _showAccounts = false;
 
   @override
   Widget build(BuildContext context) {
@@ -560,7 +555,7 @@ class _TestingAccountsCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'Akun Testing',
+                        'Akun Demo',
                         style: TextStyle(
                           fontWeight: FontWeight.w900,
                           fontSize: 16,
@@ -568,7 +563,9 @@ class _TestingAccountsCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 3),
                       Text(
-                        'Pilih akun untuk mengisi form otomatis',
+                        _showAccounts
+                            ? 'Pilih akun untuk mengisi form otomatis'
+                            : 'Disembunyikan sampai diperlukan',
                         style: TextStyle(
                           color: scheme.onSurface.withValues(alpha: 0.58),
                           fontSize: 12,
@@ -578,41 +575,78 @@ class _TestingAccountsCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                Icon(Icons.manage_accounts_rounded, color: scheme.primary),
+                Icon(
+                  _showAccounts
+                      ? Icons.visibility_off_rounded
+                      : Icons.manage_accounts_rounded,
+                  color: scheme.primary,
+                ),
               ],
             ),
             const SizedBox(height: 12),
-            Consumer<MockService>(
-              builder: (context, mock, child) {
-                final allAccounts = mock.demoAccounts
-                    .map(
-                      (account) => _AccountInfo(
-                        account.name,
-                        account.username,
-                        account.password,
-                        account.role,
-                      ),
-                    )
-                    .toList(growable: false);
-
-                return SizedBox(
-                  height: 174,
-                  child: ListView.separated(
-                    padding: EdgeInsets.zero,
-                    itemCount: allAccounts.length,
-                    separatorBuilder: (context, index) =>
-                        const SizedBox(height: 6),
-                    itemBuilder: (context, index) {
-                      final account = allAccounts[index];
-                      return _AccountTile(
-                        account: account,
-                        onTap: () => onUseAccount(account),
-                      );
-                    },
-                  ),
-                );
+            OutlinedButton.icon(
+              onPressed: () {
+                setState(() => _showAccounts = !_showAccounts);
               },
+              icon: Icon(
+                _showAccounts
+                    ? Icons.visibility_off_rounded
+                    : Icons.visibility_rounded,
+              ),
+              label: Text(
+                _showAccounts ? 'Sembunyikan akun demo' : 'Tampilkan akun demo',
+              ),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(44),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                textStyle: const TextStyle(fontWeight: FontWeight.w800),
+              ),
             ),
+            if (_showAccounts) ...[
+              const SizedBox(height: 12),
+              Text(
+                'Gunakan hanya untuk demo atau pengujian lokal.',
+                style: TextStyle(
+                  color: scheme.onSurface.withValues(alpha: 0.58),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Consumer<MockService>(
+                builder: (context, mock, child) {
+                  final allAccounts = mock.demoAccounts
+                      .map(
+                        (account) => _AccountInfo(
+                          account.name,
+                          account.username,
+                          account.password,
+                          account.role,
+                        ),
+                      )
+                      .toList(growable: false);
+
+                  return SizedBox(
+                    height: 174,
+                    child: ListView.separated(
+                      padding: EdgeInsets.zero,
+                      itemCount: allAccounts.length,
+                      separatorBuilder: (context, index) =>
+                          const SizedBox(height: 6),
+                      itemBuilder: (context, index) {
+                        final account = allAccounts[index];
+                        return _AccountTile(
+                          account: account,
+                          onTap: () => widget.onUseAccount(account),
+                        );
+                      },
+                    ),
+                  );
+                },
+              ),
+            ],
           ],
         ),
       ),

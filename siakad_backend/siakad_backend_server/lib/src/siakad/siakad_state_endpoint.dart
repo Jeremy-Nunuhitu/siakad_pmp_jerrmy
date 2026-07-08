@@ -27,6 +27,7 @@ class SiakadStateEndpoint extends Endpoint {
     'pertemuan': 'id',
     'presensi': 'id',
     'presensi_dosen': 'id',
+    'activity_log': 'id',
   };
   static final _requiredDomainTables = _tablePrimaryKeys.keys.toSet();
   static const _tableStateKeys = <String, String>{
@@ -51,6 +52,7 @@ class SiakadStateEndpoint extends Endpoint {
     'pertemuan': 'pertemuan',
     'presensi': 'presensi',
     'presensi_dosen': 'presensiDosen',
+    'activity_log': 'activityLogs',
   };
 
   Future<String?> getState(Session session) async {
@@ -122,6 +124,12 @@ WHERE table_schema = 'public'
   ) async {
     final state = jsonDecode(stateJson) as Map<String, dynamic>;
 
+    await _deleteRowsMissingFromState(
+      session,
+      transaction,
+      'activity_log',
+      state['activityLogs'],
+    );
     await _deleteRowsMissingFromState(
       session,
       transaction,
@@ -337,6 +345,11 @@ WHERE table_schema = 'public'
         'nama',
         'sks',
         'prodiId',
+        'kategori',
+        'bobotTugas',
+        'bobotUts',
+        'bobotUas',
+        'bobotSoftskill',
       ],
     );
     await _insertRows(session, transaction, 'ruangan', state['ruangan'], [
@@ -455,6 +468,22 @@ WHERE table_schema = 'public'
         'statusKehadiran',
         'waktuPresensi',
         'catatan',
+      ],
+    );
+    await _insertRows(
+      session,
+      transaction,
+      'activity_log',
+      state['activityLogs'],
+      [
+        'id',
+        'actorId',
+        'actorName',
+        'role',
+        'action',
+        'target',
+        'description',
+        'createdAt',
       ],
     );
   }
@@ -880,7 +909,17 @@ ON CONFLICT ($primaryColumn) DO UPDATE SET
         'alamat',
         'keahlian',
       ],
-      'mata_kuliah' => ['kode', 'nama', 'sks', 'prodiId'],
+      'mata_kuliah' => [
+        'kode',
+        'nama',
+        'sks',
+        'prodiId',
+        'kategori',
+        'bobotTugas',
+        'bobotUts',
+        'bobotUas',
+        'bobotSoftskill',
+      ],
       'ruangan' => [
         'kodeRuangan',
         'namaRuangan',
@@ -976,6 +1015,16 @@ ON CONFLICT ($primaryColumn) DO UPDATE SET
         'waktuPresensi',
         'catatan',
       ],
+      'activity_log' => [
+        'id',
+        'actorId',
+        'actorName',
+        'role',
+        'action',
+        'target',
+        'description',
+        'createdAt',
+      ],
       _ => throw ArgumentError.value(
         tableName,
         'tableName',
@@ -1046,6 +1095,9 @@ ON CONFLICT ($primaryColumn) DO UPDATE SET
       'statusKehadiran' => 'status_kehadiran',
       'waktuPresensi' => 'waktu_presensi',
       'dosenId' => 'dosen_id',
+      'actorId' => 'actor_id',
+      'actorName' => 'actor_name',
+      'createdAt' => 'created_at',
       _ => key,
     };
   }

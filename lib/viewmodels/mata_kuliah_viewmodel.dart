@@ -44,18 +44,55 @@ class MataKuliahViewModel extends BaseListViewModel {
     return null;
   }
 
-  void add(String kode, String nama, int sks, String prodiId) {
+  void add(
+    String kode,
+    String nama,
+    int sks,
+    String prodiId, {
+    KategoriMataKuliah kategori = KategoriMataKuliah.reguler,
+    double bobotTugas = 25,
+    double bobotUts = 25,
+    double bobotUas = 35,
+    double bobotSoftskill = 15,
+  }) {
     // Validasi kode, nama, SKS, dan prodi dilakukan di MockService.
-    runAction(() => _service.addMataKuliah(kode, nama, sks, prodiId));
+    runAction(
+      () => _service.addMataKuliah(
+        kode,
+        nama,
+        sks,
+        prodiId,
+        kategori: kategori,
+        bobotTugas: bobotTugas,
+        bobotUts: bobotUts,
+        bobotUas: bobotUas,
+        bobotSoftskill: bobotSoftskill,
+      ),
+    );
   }
 
-  void update(String kode, String nama, int sks, String prodiId) {
+  void update(
+    String kode,
+    String nama,
+    int sks,
+    String prodiId, {
+    required KategoriMataKuliah kategori,
+    required double bobotTugas,
+    required double bobotUts,
+    required double bobotUas,
+    required double bobotSoftskill,
+  }) {
     runAction(
       () => _service.updateMataKuliah(
         kode: kode,
         nama: nama,
         sks: sks,
         prodiId: prodiId,
+        kategori: kategori,
+        bobotTugas: bobotTugas,
+        bobotUts: bobotUts,
+        bobotUas: bobotUas,
+        bobotSoftskill: bobotSoftskill,
       ),
     );
   }

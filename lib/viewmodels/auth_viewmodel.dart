@@ -23,12 +23,27 @@ class AuthViewModel extends ChangeNotifier {
     }
     currentUser = user;
     errorMessage = null;
+    _service.recordActivity(
+      actor: user,
+      action: 'Login',
+      target: 'Sesi Pengguna',
+      description: '${user.name} masuk ke sistem',
+    );
     notifyListeners();
     return true;
   }
 
   void logout() {
     // Logout menghapus sesi user lalu memberi tahu UI agar kembali ke login.
+    final user = currentUser;
+    if (user != null) {
+      _service.recordActivity(
+        actor: user,
+        action: 'Logout',
+        target: 'Sesi Pengguna',
+        description: '${user.name} keluar dari sistem',
+      );
+    }
     currentUser = null;
     errorMessage = null;
     notifyListeners();

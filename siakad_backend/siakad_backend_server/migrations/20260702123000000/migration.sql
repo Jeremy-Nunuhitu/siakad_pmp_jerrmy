@@ -102,11 +102,23 @@ CREATE TABLE IF NOT EXISTS mata_kuliah (
   nama text NOT NULL,
   sks bigint NOT NULL,
   prodi_id text NOT NULL,
+  kategori text NOT NULL DEFAULT 'reguler',
+  bobot_tugas double precision NOT NULL DEFAULT 25,
+  bobot_uts double precision NOT NULL DEFAULT 25,
+  bobot_uas double precision NOT NULL DEFAULT 35,
+  bobot_softskill double precision NOT NULL DEFAULT 15,
   data jsonb NOT NULL,
   CONSTRAINT fk_mata_kuliah_prodi
     FOREIGN KEY (prodi_id) REFERENCES prodi(id)
     ON UPDATE CASCADE ON DELETE RESTRICT
 );
+
+ALTER TABLE mata_kuliah
+  ADD COLUMN IF NOT EXISTS kategori text NOT NULL DEFAULT 'reguler',
+  ADD COLUMN IF NOT EXISTS bobot_tugas double precision NOT NULL DEFAULT 25,
+  ADD COLUMN IF NOT EXISTS bobot_uts double precision NOT NULL DEFAULT 25,
+  ADD COLUMN IF NOT EXISTS bobot_uas double precision NOT NULL DEFAULT 35,
+  ADD COLUMN IF NOT EXISTS bobot_softskill double precision NOT NULL DEFAULT 15;
 
 CREATE TABLE IF NOT EXISTS ruangan (
   kode_ruangan text PRIMARY KEY,
@@ -301,6 +313,18 @@ CREATE TABLE IF NOT EXISTS presensi_dosen (
     ON UPDATE CASCADE ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS activity_log (
+  id text PRIMARY KEY,
+  actor_id text NOT NULL,
+  actor_name text NOT NULL,
+  role text NOT NULL,
+  action text NOT NULL,
+  target text NOT NULL,
+  description text NOT NULL,
+  created_at text NOT NULL,
+  data jsonb NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_siakad_users_username ON siakad_users(username);
 CREATE INDEX IF NOT EXISTS idx_prodi_fakultas_id ON prodi(fakultas_id);
 CREATE INDEX IF NOT EXISTS idx_mahasiswa_prodi_id ON mahasiswa(prodi_id);
@@ -321,6 +345,8 @@ CREATE INDEX IF NOT EXISTS idx_presensi_pertemuan_id ON presensi(pertemuan_id);
 CREATE INDEX IF NOT EXISTS idx_presensi_mahasiswa_id ON presensi(mahasiswa_id);
 CREATE INDEX IF NOT EXISTS idx_presensi_dosen_pertemuan_id ON presensi_dosen(pertemuan_id);
 CREATE INDEX IF NOT EXISTS idx_presensi_dosen_dosen_id ON presensi_dosen(dosen_id);
+CREATE INDEX IF NOT EXISTS idx_activity_log_created_at ON activity_log(created_at);
+CREATE INDEX IF NOT EXISTS idx_activity_log_actor_id ON activity_log(actor_id);
 
 ALTER TABLE siakad_users
   ALTER COLUMN username SET NOT NULL,
@@ -391,6 +417,16 @@ ALTER TABLE mata_kuliah
   ALTER COLUMN nama SET NOT NULL,
   ALTER COLUMN sks SET NOT NULL,
   ALTER COLUMN prodi_id SET NOT NULL,
+  ALTER COLUMN kategori SET DEFAULT 'reguler',
+  ALTER COLUMN kategori SET NOT NULL,
+  ALTER COLUMN bobot_tugas SET DEFAULT 25,
+  ALTER COLUMN bobot_tugas SET NOT NULL,
+  ALTER COLUMN bobot_uts SET DEFAULT 25,
+  ALTER COLUMN bobot_uts SET NOT NULL,
+  ALTER COLUMN bobot_uas SET DEFAULT 35,
+  ALTER COLUMN bobot_uas SET NOT NULL,
+  ALTER COLUMN bobot_softskill SET DEFAULT 15,
+  ALTER COLUMN bobot_softskill SET NOT NULL,
   ALTER COLUMN data SET NOT NULL;
 
 ALTER TABLE ruangan
@@ -494,6 +530,16 @@ ALTER TABLE presensi_dosen
   ALTER COLUMN status_kehadiran SET NOT NULL,
   ALTER COLUMN waktu_presensi SET NOT NULL,
   ALTER COLUMN catatan SET NOT NULL,
+  ALTER COLUMN data SET NOT NULL;
+
+ALTER TABLE activity_log
+  ALTER COLUMN actor_id SET NOT NULL,
+  ALTER COLUMN actor_name SET NOT NULL,
+  ALTER COLUMN role SET NOT NULL,
+  ALTER COLUMN action SET NOT NULL,
+  ALTER COLUMN target SET NOT NULL,
+  ALTER COLUMN description SET NOT NULL,
+  ALTER COLUMN created_at SET NOT NULL,
   ALTER COLUMN data SET NOT NULL;
 
 DO $$

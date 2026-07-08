@@ -1,10 +1,15 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:excel/excel.dart' as xlsx;
 import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../models/siakad_models.dart';
 import '../services/mock_service.dart';
 import '../utils/app_helpers.dart';
+import '../utils/csv_file_writer.dart';
 import '../viewmodels/base_list_viewmodel.dart';
 import '../viewmodels/dosen_viewmodel.dart';
 import '../viewmodels/fakultas_viewmodel.dart';
@@ -330,6 +335,8 @@ class _GlobalDataViewState extends State<GlobalDataView> {
             label: 'Dosen Pengajar',
             value: '${service.dosenPengajar.length}',
           ),
+          const SizedBox(height: 14),
+          _ActivityLogPanel(logs: service.recentActivityLogs(limit: 8)),
         ],
       ),
     );
@@ -447,6 +454,420 @@ class _GlobalDataViewState extends State<GlobalDataView> {
       showAppMessage(context, error.message);
     }
   }
+}
+
+class _AcademicExportPanel extends StatelessWidget {
+  const _AcademicExportPanel({required this.service});
+
+  final MockService service;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.table_view_outlined,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Template dan Export Data',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                for (final type in AcademicExportType.values)
+                  _ExportActionGroup(type: type, service: service),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ExportActionGroup extends StatelessWidget {
+  const _ExportActionGroup({required this.type, required this.service});
+
+  final AcademicExportType type;
+  final MockService service;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        OutlinedButton.icon(
+          onPressed: () => _saveCsv(
+            context,
+            fileName: type.fileName,
+            contents: service.academicCsvTemplate(type),
+          ),
+          icon: const Icon(Icons.description_outlined),
+          label: Text('Template ${type.label}'),
+        ),
+        FilledButton.tonalIcon(
+          onPressed: () => _saveCsv(
+            context,
+            fileName: 'export_${type.fileName}',
+            contents: service.exportAcademicCsv(type),
+          ),
+          icon: const Icon(Icons.download_outlined),
+          label: Text('Export ${type.label}'),
+        ),
+      ],
+    );
+  }
+}
+
+class _ActivityLogPanel extends StatelessWidget {
+  const _ActivityLogPanel({required this.logs});
+
+  final List<ActivityLog> logs;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.manage_history_outlined,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Log Aktivitas Terbaru',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (logs.isEmpty)
+              const Text('Belum ada aktivitas yang tercatat.')
+            else
+              for (final log in logs)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.history_outlined),
+                  title: Text('${log.action} - ${log.target}'),
+                  subtitle: Text(
+                    '${log.description}\n${log.actorName} (${log.role}) - ${_formatDateTime(log.createdAt)}',
+                  ),
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class ImportExportDataView extends StatelessWidget {
+  const ImportExportDataView({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final service = context.watch<MockService>();
+    return AppScaffold(
+      title: 'Import dan Export Data',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _AcademicImportPanel(service: service),
+          const SizedBox(height: 14),
+          _AcademicExportPanel(service: service),
+        ],
+      ),
+    );
+  }
+}
+
+class _AcademicImportPanel extends StatefulWidget {
+  const _AcademicImportPanel({required this.service});
+
+  final MockService service;
+
+  @override
+  State<_AcademicImportPanel> createState() => _AcademicImportPanelState();
+}
+
+class _AcademicImportPanelState extends State<_AcademicImportPanel> {
+  AcademicExportType _type = AcademicExportType.mahasiswa;
+  String? _selectedFileName;
+  List<Map<String, String>> _rows = const [];
+  List<String> _parseErrors = const [];
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.upload_file_outlined,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Import CSV/XLSX',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<AcademicExportType>(
+              initialValue: _type,
+              decoration: const InputDecoration(labelText: 'Jenis Data'),
+              items: [
+                for (final type in AcademicExportType.values)
+                  DropdownMenuItem(value: type, child: Text(type.label)),
+              ],
+              onChanged: (value) {
+                if (value == null) return;
+                setState(() {
+                  _type = value;
+                  _selectedFileName = null;
+                  _rows = const [];
+                  _parseErrors = const [];
+                });
+              },
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: _pickImportFile,
+                  icon: const Icon(Icons.file_open_outlined),
+                  label: const Text('Pilih File'),
+                ),
+                FilledButton.icon(
+                  onPressed: _rows.isEmpty ? null : _importRows,
+                  icon: const Icon(Icons.cloud_upload_outlined),
+                  label: Text('Import ${_rows.length} Baris'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              _selectedFileName == null
+                  ? 'Gunakan template dari panel export agar urutan kolom sesuai.'
+                  : 'File: $_selectedFileName - ${_rows.length} baris siap diimport',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+            if (_parseErrors.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                _parseErrors.take(3).join('\n'),
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickImportFile() async {
+    final result = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['csv', 'xlsx'],
+      withData: true,
+    );
+    if (result == null || result.files.single.bytes == null) return;
+
+    final file = result.files.single;
+    try {
+      final rows = _rowsFromImportFile(file);
+      setState(() {
+        _selectedFileName = file.name;
+        _rows = rows;
+        _parseErrors = const [];
+      });
+    } on StateError catch (error) {
+      setState(() {
+        _selectedFileName = file.name;
+        _rows = const [];
+        _parseErrors = [error.message];
+      });
+    } catch (error) {
+      setState(() {
+        _selectedFileName = file.name;
+        _rows = const [];
+        _parseErrors = ['$error'];
+      });
+    }
+  }
+
+  void _importRows() {
+    final result = widget.service.importAcademicRows(_type, _rows);
+    showAppMessage(context, result.message);
+    if (result.errors.isNotEmpty) {
+      showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Catatan Import'),
+          content: SizedBox(
+            width: 560,
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: result.errors.length,
+              separatorBuilder: (_, _) => const Divider(height: 1),
+              itemBuilder: (context, index) => Text(result.errors[index]),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Tutup'),
+            ),
+          ],
+        ),
+      );
+    }
+    setState(() {
+      _selectedFileName = null;
+      _rows = const [];
+      _parseErrors = const [];
+    });
+  }
+}
+
+Future<void> _saveCsv(
+  BuildContext context, {
+  required String fileName,
+  required String contents,
+}) async {
+  final bytes = Uint8List.fromList(utf8.encode(contents));
+  final savedPath = await FilePicker.saveFile(
+    dialogTitle: 'Simpan $fileName',
+    fileName: fileName,
+    type: FileType.custom,
+    allowedExtensions: const ['csv'],
+    bytes: bytes,
+  );
+  await writeCsvFile(savedPath, bytes);
+  if (context.mounted && savedPath != null) {
+    showAppMessage(context, 'File berhasil disimpan: $fileName');
+  }
+}
+
+List<Map<String, String>> _rowsFromImportFile(PlatformFile file) {
+  final bytes = file.bytes;
+  if (bytes == null || bytes.isEmpty) {
+    throw StateError('File tidak dapat dibaca');
+  }
+  final extension = file.extension?.toLowerCase();
+  final rawRows = switch (extension) {
+    'csv' => _parseCsvRows(utf8.decode(bytes)),
+    'xlsx' => _parseXlsxRows(bytes),
+    _ => throw StateError('Format file harus CSV atau XLSX'),
+  };
+  return _rowsFromTable(rawRows);
+}
+
+List<List<String>> _parseXlsxRows(Uint8List bytes) {
+  final workbook = xlsx.Excel.decodeBytes(bytes);
+  if (workbook.tables.isEmpty) throw StateError('Workbook XLSX kosong');
+  final sheet = workbook.tables.values.first;
+  return [
+    for (final row in sheet.rows)
+      [for (final cell in row) cell?.value.toString().trim() ?? ''],
+  ];
+}
+
+List<List<String>> _parseCsvRows(String source) {
+  final rows = <List<String>>[];
+  final row = <String>[];
+  final cell = StringBuffer();
+  var inQuotes = false;
+
+  for (var i = 0; i < source.length; i++) {
+    final char = source[i];
+    if (char == '"') {
+      if (inQuotes && i + 1 < source.length && source[i + 1] == '"') {
+        cell.write('"');
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char == ',' && !inQuotes) {
+      row.add(cell.toString());
+      cell.clear();
+    } else if ((char == '\n' || char == '\r') && !inQuotes) {
+      if (char == '\r' && i + 1 < source.length && source[i + 1] == '\n') {
+        i++;
+      }
+      row.add(cell.toString());
+      rows.add(List<String>.from(row));
+      row.clear();
+      cell.clear();
+    } else {
+      cell.write(char);
+    }
+  }
+
+  if (cell.isNotEmpty || row.isNotEmpty) {
+    row.add(cell.toString());
+    rows.add(List<String>.from(row));
+  }
+  return rows;
+}
+
+List<Map<String, String>> _rowsFromTable(List<List<String>> table) {
+  final nonEmptyRows = table
+      .where((row) => row.any((cell) => cell.trim().isNotEmpty))
+      .toList();
+  if (nonEmptyRows.isEmpty) throw StateError('File tidak memiliki data');
+  final headers = nonEmptyRows.first.map((cell) => cell.trim()).toList();
+  if (headers.every((header) => header.isEmpty)) {
+    throw StateError('Header kolom wajib ada di baris pertama');
+  }
+
+  return [
+    for (final row in nonEmptyRows.skip(1))
+      {
+        for (var index = 0; index < headers.length; index++)
+          if (headers[index].isNotEmpty)
+            headers[index]: index < row.length ? row[index].trim() : '',
+      },
+  ];
 }
 
 class ProdiScopeDataView extends StatelessWidget {
@@ -882,7 +1303,12 @@ class MataKuliahManagementView extends StatelessWidget {
             itemBuilder: (context, item, index) => InfoTile(
               icon: Icons.menu_book_outlined,
               title: item.nama,
-              subtitle: '${item.kode} - ${item.sks} SKS',
+              subtitle:
+                  '${item.kode} - ${item.sks} SKS - ${item.kategori.label}\n'
+                  'Bobot: Tugas ${item.bobotTugas.toStringAsFixed(0)}%, '
+                  'UTS ${item.bobotUts.toStringAsFixed(0)}%, '
+                  'UAS ${item.bobotUas.toStringAsFixed(0)}%, '
+                  'Softskill ${item.bobotSoftskill.toStringAsFixed(0)}%',
               trailing: _CrudMenu(
                 onEdit: () => _editMataKuliah(context, item),
                 onDelete: () => _deleteMataKuliah(context, item.kode),
@@ -1007,25 +1433,23 @@ class ProdiUserView extends StatelessWidget {
   Widget build(BuildContext context) {
     // Halaman ini menampilkan akun yang berada dalam scope prodi aktif.
     final service = context.watch<MockService>();
-    final users = service.users
-        .where(
-          (item) =>
-              item.role == Role.dosen ||
-              item.role == Role.mahasiswa ||
-              item.role == Role.adminProdi,
-        )
-        .toList();
 
     return AppScaffold(
       title: 'User Prodi',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _SearchableList<User>(
-            items: users,
+          _PagedSearchableList<User>(
+            pageSize: 5,
+            pageLoader: (query, page, pageSize, sortMode) => _pagedProdiUsers(
+              service: service,
+              prodiId: prodiId,
+              query: query,
+              page: page,
+              pageSize: pageSize,
+              sortMode: sortMode,
+            ),
             hintText: 'Cari nama, username, role, atau scope',
-            searchableText: (user) =>
-                '${user.name} ${user.username} ${user.role.label} ${user.scopeId}',
             itemBuilder: (context, user, index) => InfoTile(
               icon: Icons.person_outline,
               title: user.name,
@@ -1036,6 +1460,66 @@ class ProdiUserView extends StatelessWidget {
       ),
     );
   }
+}
+
+PagedResult<User> _pagedProdiUsers({
+  required MockService service,
+  required String prodiId,
+  required String query,
+  required int page,
+  required int pageSize,
+  required _DataSortMode sortMode,
+}) {
+  final normalizedQuery = query.toLowerCase().trim();
+  final source = _prodiScopedUsers(service, prodiId);
+  final filtered = normalizedQuery.isEmpty
+      ? source
+      : source.where((user) {
+          final searchableText =
+              '${user.name} ${user.username} ${user.role.label} ${user.scopeId}';
+          return searchableText.toLowerCase().contains(normalizedQuery);
+        }).toList();
+
+  final ordered = filtered.toList();
+  if (sortMode == _DataSortMode.alphabet) {
+    ordered.sort((first, second) => _compareText(first.name, second.name));
+  }
+  final pagedSource = sortMode == _DataSortMode.newest
+      ? ordered.reversed.toList()
+      : ordered;
+  final safePage = page < 0 ? 0 : page;
+  final safePageSize = pageSize < 1 ? 5 : pageSize;
+  final window = pagedSource
+      .skip(safePage * safePageSize)
+      .take(safePageSize + 1)
+      .toList();
+
+  return PagedResult<User>(
+    items: window.take(safePageSize).toList(),
+    page: safePage,
+    pageSize: safePageSize,
+    hasNext: window.length > safePageSize,
+  );
+}
+
+List<User> _prodiScopedUsers(MockService service, String prodiId) {
+  final dosenIds = service.dosen
+      .where((dosen) => dosen.prodiId == prodiId)
+      .map((dosen) => dosen.nidn)
+      .toSet();
+  final mahasiswaIds = service.mahasiswa
+      .where((mahasiswa) => mahasiswa.prodiId == prodiId)
+      .map((mahasiswa) => mahasiswa.nim)
+      .toSet();
+
+  return service.users.where((user) {
+    return switch (user.role) {
+      Role.adminProdi => user.scopeId == prodiId,
+      Role.dosen => dosenIds.contains(user.scopeId),
+      Role.mahasiswa => mahasiswaIds.contains(user.scopeId),
+      _ => false,
+    };
+  }).toList();
 }
 
 class UserManagementView extends StatelessWidget {
@@ -1176,11 +1660,16 @@ class UserManagementView extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _SearchableList<User>(
-            items: visibleUsers,
+          _PagedSearchableList<User>(
+            pageSize: 10,
+            pageLoader: (query, page, pageSize, sortMode) => _pagedUsers(
+              visibleUsers,
+              query: query,
+              page: page,
+              pageSize: pageSize,
+              sortMode: sortMode,
+            ),
             hintText: 'Cari nama, username, role, atau scope',
-            searchableText: (user) =>
-                '${user.name} ${user.username} ${user.role.label} ${user.scopeId}',
             itemBuilder: (context, user, index) => InfoTile(
               icon: Icons.admin_panel_settings_outlined,
               title: user.name,
@@ -1191,6 +1680,36 @@ class UserManagementView extends StatelessWidget {
       ),
     );
   }
+}
+
+PagedResult<User> _pagedUsers(
+  List<User> source, {
+  required String query,
+  required int page,
+  required int pageSize,
+  required _DataSortMode sortMode,
+}) {
+  final normalizedQuery = query.toLowerCase().trim();
+  final filtered = normalizedQuery.isEmpty
+      ? source
+      : source.where((user) {
+          final text =
+              '${user.name} ${user.username} ${user.role.label} ${user.scopeId}';
+          return text.toLowerCase().contains(normalizedQuery);
+        }).toList();
+  filtered.sort(
+    sortMode == _DataSortMode.alphabet
+        ? (first, second) => _compareText(first.name, second.name)
+        : (first, second) => second.id.compareTo(first.id),
+  );
+  final start = page * pageSize;
+  final window = filtered.skip(start).take(pageSize + 1).toList();
+  return PagedResult<User>(
+    items: window.take(pageSize).toList(),
+    page: page,
+    pageSize: pageSize,
+    hasNext: window.length > pageSize,
+  );
 }
 
 class _StatRow extends StatelessWidget {
@@ -1793,46 +2312,98 @@ Future<void> _editMataKuliah(BuildContext context, MataKuliah item) async {
   final vm = context.read<MataKuliahViewModel>();
   final nameController = TextEditingController(text: item.nama);
   final sksController = TextEditingController(text: item.sks.toString());
+  final tugasController = TextEditingController(
+    text: item.bobotTugas.toStringAsFixed(0),
+  );
+  final utsController = TextEditingController(
+    text: item.bobotUts.toStringAsFixed(0),
+  );
+  final uasController = TextEditingController(
+    text: item.bobotUas.toStringAsFixed(0),
+  );
+  final softskillController = TextEditingController(
+    text: item.bobotSoftskill.toStringAsFixed(0),
+  );
+  var kategori = item.kategori;
 
   await showDialog<void>(
     context: context,
     builder: (context) {
-      return AlertDialog(
-        title: Text('Ubah Mata Kuliah ${item.kode}'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: 'Nama Mata Kuliah'),
+      return StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Text('Ubah Mata Kuliah ${item.kode}'),
+          content: SizedBox(
+            width: 520,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Nama Mata Kuliah',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: sksController,
+                    decoration: const InputDecoration(labelText: 'Jumlah SKS'),
+                    keyboardType: TextInputType.number,
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<KategoriMataKuliah>(
+                    initialValue: kategori,
+                    decoration: const InputDecoration(labelText: 'Kategori'),
+                    items: [
+                      for (final value in KategoriMataKuliah.values)
+                        DropdownMenuItem(
+                          value: value,
+                          child: Text(value.label),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) setState(() => kategori = value);
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  _BobotNilaiFields(
+                    tugasController: tugasController,
+                    utsController: utsController,
+                    uasController: uasController,
+                    softskillController: softskillController,
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: sksController,
-              decoration: const InputDecoration(labelText: 'Jumlah SKS'),
-              keyboardType: TextInputType.number,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Batal'),
+            ),
+            FilledButton(
+              onPressed: () {
+                vm.update(
+                  item.kode,
+                  nameController.text,
+                  int.tryParse(sksController.text) ?? 0,
+                  item.prodiId,
+                  kategori: kategori,
+                  bobotTugas: double.tryParse(tugasController.text) ?? -1,
+                  bobotUts: double.tryParse(utsController.text) ?? -1,
+                  bobotUas: double.tryParse(uasController.text) ?? -1,
+                  bobotSoftskill:
+                      double.tryParse(softskillController.text) ?? -1,
+                );
+                showAppMessage(context, vm.message);
+                if ((vm.message ?? '').contains('berhasil')) {
+                  Navigator.pop(context);
+                }
+              },
+              child: const Text('Simpan'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Batal'),
-          ),
-          FilledButton(
-            onPressed: () {
-              vm.update(
-                item.kode,
-                nameController.text,
-                int.tryParse(sksController.text) ?? 0,
-                item.prodiId,
-              );
-              showAppMessage(context, vm.message);
-              Navigator.pop(context);
-            },
-            child: const Text('Simpan'),
-          ),
-        ],
       );
     },
   );
@@ -1844,6 +2415,93 @@ Future<void> _deleteMataKuliah(BuildContext context, String kode) async {
   if (!confirmed) return;
   vm.delete(kode);
   if (context.mounted) showAppMessage(context, vm.message);
+}
+
+class _BobotNilaiFields extends StatelessWidget {
+  const _BobotNilaiFields({
+    required this.tugasController,
+    required this.utsController,
+    required this.uasController,
+    required this.softskillController,
+  });
+
+  final TextEditingController tugasController;
+  final TextEditingController utsController;
+  final TextEditingController uasController;
+  final TextEditingController softskillController;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final fields = [
+          TextField(
+            controller: tugasController,
+            decoration: const InputDecoration(labelText: 'Bobot Tugas (%)'),
+            keyboardType: TextInputType.number,
+          ),
+          TextField(
+            controller: utsController,
+            decoration: const InputDecoration(labelText: 'Bobot UTS (%)'),
+            keyboardType: TextInputType.number,
+          ),
+          TextField(
+            controller: uasController,
+            decoration: const InputDecoration(labelText: 'Bobot UAS (%)'),
+            keyboardType: TextInputType.number,
+          ),
+          TextField(
+            controller: softskillController,
+            decoration: const InputDecoration(labelText: 'Bobot Softskill (%)'),
+            keyboardType: TextInputType.number,
+          ),
+        ];
+
+        if (constraints.maxWidth < 460) {
+          return Column(
+            children: [
+              for (final field in fields) ...[field, const SizedBox(height: 8)],
+            ],
+          );
+        }
+
+        return Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final field in fields)
+              SizedBox(width: (constraints.maxWidth - 8) / 2, child: field),
+          ],
+        );
+      },
+    );
+  }
+}
+
+void _applyBobotPreset(
+  KategoriMataKuliah kategori,
+  TextEditingController tugasController,
+  TextEditingController utsController,
+  TextEditingController uasController,
+  TextEditingController softskillController,
+) {
+  switch (kategori) {
+    case KategoriMataKuliah.reguler:
+      tugasController.text = '25';
+      utsController.text = '25';
+      uasController.text = '35';
+      softskillController.text = '15';
+    case KategoriMataKuliah.praktikum:
+      tugasController.text = '40';
+      utsController.text = '15';
+      uasController.text = '30';
+      softskillController.text = '15';
+    case KategoriMataKuliah.caseMethod:
+      tugasController.text = '45';
+      utsController.text = '15';
+      uasController.text = '25';
+      softskillController.text = '15';
+  }
 }
 
 class _DosenMultiSelectField extends StatelessWidget {
@@ -2671,60 +3329,112 @@ Future<void> _quickAddMataKuliah(BuildContext context, String prodiId) async {
   final kodeController = TextEditingController();
   final nameController = TextEditingController();
   final sksController = TextEditingController();
+  final tugasController = TextEditingController(text: '25');
+  final utsController = TextEditingController(text: '25');
+  final uasController = TextEditingController(text: '35');
+  final softskillController = TextEditingController(text: '15');
+  var kategori = KategoriMataKuliah.reguler;
 
   await showDialog<void>(
     context: context,
     builder: (context) {
-      return AlertDialog(
-        title: const Text('Tambah Mata Kuliah'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: kodeController,
-              decoration: const InputDecoration(labelText: 'Kode Mata Kuliah'),
+      return StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Tambah Mata Kuliah'),
+          content: SizedBox(
+            width: 520,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: kodeController,
+                    decoration: const InputDecoration(
+                      labelText: 'Kode Mata Kuliah',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Nama Mata Kuliah',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: sksController,
+                    decoration: const InputDecoration(labelText: 'Jumlah SKS'),
+                    keyboardType: TextInputType.number,
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<KategoriMataKuliah>(
+                    initialValue: kategori,
+                    decoration: const InputDecoration(labelText: 'Kategori'),
+                    items: [
+                      for (final value in KategoriMataKuliah.values)
+                        DropdownMenuItem(
+                          value: value,
+                          child: Text(value.label),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setState(() {
+                        kategori = value;
+                        _applyBobotPreset(
+                          value,
+                          tugasController,
+                          utsController,
+                          uasController,
+                          softskillController,
+                        );
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  _BobotNilaiFields(
+                    tugasController: tugasController,
+                    utsController: utsController,
+                    uasController: uasController,
+                    softskillController: softskillController,
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: 'Nama Mata Kuliah'),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: sksController,
-              decoration: const InputDecoration(labelText: 'Jumlah SKS'),
-              keyboardType: TextInputType.number,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Batal'),
           ),
-          FilledButton(
-            onPressed: () {
-              final sks = int.tryParse(sksController.text) ?? 0;
-              if (kodeController.text.isNotEmpty &&
-                  nameController.text.isNotEmpty &&
-                  sks > 0) {
-                try {
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Batal'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final sks = int.tryParse(sksController.text) ?? 0;
+                if (kodeController.text.isNotEmpty &&
+                    nameController.text.isNotEmpty &&
+                    sks > 0) {
                   vm.add(
                     kodeController.text,
                     nameController.text,
                     sks,
                     prodiId,
+                    kategori: kategori,
+                    bobotTugas: double.tryParse(tugasController.text) ?? -1,
+                    bobotUts: double.tryParse(utsController.text) ?? -1,
+                    bobotUas: double.tryParse(uasController.text) ?? -1,
+                    bobotSoftskill:
+                        double.tryParse(softskillController.text) ?? -1,
                   );
                   showAppMessage(context, vm.message);
-                  Navigator.pop(context);
-                } catch (e) {
-                  showAppMessage(context, e.toString());
+                  if ((vm.message ?? '').contains('berhasil')) {
+                    Navigator.pop(context);
+                  }
                 }
-              }
-            },
-            child: const Text('Simpan'),
-          ),
-        ],
+              },
+              child: const Text('Simpan'),
+            ),
+          ],
+        ),
       );
     },
   );

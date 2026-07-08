@@ -22,6 +22,59 @@ class DemoAccount {
   final String role;
 }
 
+enum AcademicExportType { mahasiswa, dosen, mataKuliah, nilai }
+
+extension AcademicExportTypeLabel on AcademicExportType {
+  String get label {
+    switch (this) {
+      case AcademicExportType.mahasiswa:
+        return 'Mahasiswa';
+      case AcademicExportType.dosen:
+        return 'Dosen';
+      case AcademicExportType.mataKuliah:
+        return 'Mata Kuliah';
+      case AcademicExportType.nilai:
+        return 'Nilai';
+    }
+  }
+
+  String get fileName {
+    switch (this) {
+      case AcademicExportType.mahasiswa:
+        return 'template_mahasiswa.csv';
+      case AcademicExportType.dosen:
+        return 'template_dosen.csv';
+      case AcademicExportType.mataKuliah:
+        return 'template_mata_kuliah.csv';
+      case AcademicExportType.nilai:
+        return 'template_nilai.csv';
+    }
+  }
+}
+
+class AcademicImportResult {
+  const AcademicImportResult({
+    required this.created,
+    required this.updated,
+    required this.skipped,
+    required this.errors,
+  });
+
+  final int created;
+  final int updated;
+  final int skipped;
+  final List<String> errors;
+
+  String get message {
+    final base =
+        'Import selesai: $created dibuat, $updated diperbarui, $skipped dilewati';
+    if (errors.isEmpty) return base;
+    return '$base. ${errors.length} baris error.';
+  }
+}
+
+enum _ImportAction { created, updated, skipped }
+
 class _RowUpsert {
   const _RowUpsert(this.tableName, this.row);
 
@@ -102,6 +155,7 @@ class MockService {
   final List<Presensi> _presensi = [];
   final List<PresensiDosen> _presensiDosen = [];
   final List<FaseKrs> _faseKrs = [];
+  final List<ActivityLog> _activityLogs = [];
 
   final Map<String, User> _usersByUsername = {};
   final Map<String, Mahasiswa> _mahasiswaByNim = {};
@@ -159,6 +213,9 @@ class MockService {
     _presensiDosen,
   );
   late final List<FaseKrs> faseKrs = UnmodifiableListView(_faseKrs);
+  late final List<ActivityLog> activityLogs = UnmodifiableListView(
+    _activityLogs,
+  );
 
   void _rebuildIndexes() {
     _usersByUsername
@@ -469,6 +526,383 @@ class MockService {
     }
 
     return null;
+  }
+
+  void recordActivity({
+    required User actor,
+    required String action,
+    required String target,
+    required String description,
+  }) {
+    _addActivityLog(
+      actor: actor,
+      action: action,
+      target: target,
+      description: description,
+    );
+    _persistChanges();
+  }
+
+  List<ActivityLog> recentActivityLogs({int limit = 20}) {
+    final ordered = _activityLogs.toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return UnmodifiableListView(ordered.take(limit));
+  }
+
+  String academicCsvTemplate(AcademicExportType type) {
+    return _csvRows([_academicCsvHeaders(type)]);
+  }
+
+  String exportAcademicCsv(AcademicExportType type) {
+    final headers = _academicCsvHeaders(type);
+    final rows = switch (type) {
+      AcademicExportType.mahasiswa => _mahasiswa.map(
+        (item) => [
+          item.nim,
+          item.nama,
+          item.jenisKelamin,
+          item.prodiId,
+          item.pembimbingAkademikId,
+          item.password,
+          item.semester,
+          item.email,
+          item.noHp,
+          item.alamat,
+          item.status.label,
+        ],
+      ),
+      AcademicExportType.dosen => _dosen.map(
+        (item) => [
+          item.nidn,
+          item.nama,
+          item.prodiId,
+          item.password,
+          item.email,
+          item.noHp,
+          item.alamat,
+          item.keahlian,
+        ],
+      ),
+      AcademicExportType.mataKuliah => _mataKuliah.map(
+        (item) => [
+          item.kode,
+          item.nama,
+          item.sks,
+          item.prodiId,
+          item.kategori.label,
+          item.bobotTugas,
+          item.bobotUts,
+          item.bobotUas,
+          item.bobotSoftskill,
+        ],
+      ),
+      AcademicExportType.nilai => _nilai.map((item) {
+        final kelas = _kelasById[item.kelasId];
+        return [
+          item.mahasiswaId,
+          item.kelasId,
+          kelas?.dosenId ?? '',
+          kelas?.mataKuliahId ?? '',
+          item.nilaiTugas,
+          item.nilaiUts,
+          item.nilaiUas,
+          item.nilaiSoftskill,
+          item.nilaiAngka,
+          item.nilaiHuruf,
+          item.tahunAjaranId,
+        ];
+      }),
+    };
+    return _csvRows([headers, ...rows]);
+  }
+
+  AcademicImportResult importAcademicRows(
+    AcademicExportType type,
+    List<Map<String, String>> rows,
+  ) {
+    var created = 0;
+    var updated = 0;
+    var skipped = 0;
+    final errors = <String>[];
+
+    for (var i = 0; i < rows.length; i++) {
+      final rowNumber = i + 2;
+      final row = rows[i];
+      try {
+        final action = switch (type) {
+          AcademicExportType.mahasiswa => _importMahasiswaRow(row),
+          AcademicExportType.dosen => _importDosenRow(row),
+          AcademicExportType.mataKuliah => _importMataKuliahRow(row),
+          AcademicExportType.nilai => _importNilaiRow(row),
+        };
+        switch (action) {
+          case _ImportAction.created:
+            created++;
+          case _ImportAction.updated:
+            updated++;
+          case _ImportAction.skipped:
+            skipped++;
+        }
+      } on StateError catch (error) {
+        errors.add('Baris $rowNumber: ${error.message}');
+      } catch (error) {
+        errors.add('Baris $rowNumber: $error');
+      }
+    }
+
+    if (created > 0 || updated > 0) {
+      _addActivityLog(
+        actor: null,
+        action: 'Import Data',
+        target: type.label,
+        description:
+            'Import ${type.label}: $created dibuat, $updated diperbarui',
+      );
+      _rebuildIndexes();
+      _saveDelta();
+    }
+
+    return AcademicImportResult(
+      created: created,
+      updated: updated,
+      skipped: skipped,
+      errors: errors,
+    );
+  }
+
+  _ImportAction _importMahasiswaRow(Map<String, String> row) {
+    final nim = _cell(row, 'nim');
+    if (nim.isEmpty) return _ImportAction.skipped;
+    final nama = _requiredCell(row, 'nama');
+    final prodiId = _requiredCell(row, 'prodiId');
+    final jenisKelamin = _cell(row, 'jenisKelamin', fallback: 'L');
+    final pembimbingId = _cell(row, 'pembimbingAkademikId');
+    _ensureExists(_prodi.any((item) => item.id == prodiId), 'Prodi');
+    final dosenProdi = _dosen.where((item) => item.prodiId == prodiId).toList();
+    if (pembimbingId.isEmpty && dosenProdi.isEmpty) {
+      throw StateError('Dosen PA wajib diisi karena prodi belum punya dosen');
+    }
+    final resolvedPembimbing = pembimbingId.isNotEmpty
+        ? pembimbingId
+        : dosenProdi.first.nidn;
+    _ensureDosenPaValid(prodiId, resolvedPembimbing);
+
+    final existingIndex = _mahasiswa.indexWhere((item) => item.nim == nim);
+    final mahasiswa = Mahasiswa(
+      nim: nim,
+      nama: nama,
+      jenisKelamin: jenisKelamin,
+      prodiId: prodiId,
+      password: _cell(row, 'password', fallback: 'password'),
+      pembimbingAkademikId: resolvedPembimbing,
+      semester: int.tryParse(_cell(row, 'semester', fallback: '1')) ?? 1,
+      email: _cell(row, 'email'),
+      noHp: _cell(row, 'noHp'),
+      alamat: _cell(row, 'alamat'),
+      status: _statusMahasiswaFromLabel(_cell(row, 'status')),
+    );
+
+    if (existingIndex == -1) {
+      _mahasiswa.add(mahasiswa);
+      return _ImportAction.created;
+    }
+    _mahasiswa[existingIndex] = mahasiswa;
+    return _ImportAction.updated;
+  }
+
+  _ImportAction _importDosenRow(Map<String, String> row) {
+    final nidn = _cell(row, 'nidn');
+    if (nidn.isEmpty) return _ImportAction.skipped;
+    final nama = _requiredCell(row, 'nama');
+    final prodiId = _requiredCell(row, 'prodiId');
+    _ensureExists(_prodi.any((item) => item.id == prodiId), 'Prodi');
+
+    final existingIndex = _dosen.indexWhere((item) => item.nidn == nidn);
+    final dosen = Dosen(
+      nidn: nidn,
+      nama: nama,
+      prodiId: prodiId,
+      password: _cell(row, 'password', fallback: 'password'),
+      email: _cell(row, 'email'),
+      noHp: _cell(row, 'noHp'),
+      alamat: _cell(row, 'alamat'),
+      keahlian: _cell(row, 'keahlian'),
+    );
+
+    if (existingIndex == -1) {
+      _dosen.add(dosen);
+      return _ImportAction.created;
+    }
+    _dosen[existingIndex] = dosen;
+    return _ImportAction.updated;
+  }
+
+  _ImportAction _importMataKuliahRow(Map<String, String> row) {
+    final kode = _cell(row, 'kode');
+    if (kode.isEmpty) return _ImportAction.skipped;
+    final nama = _requiredCell(row, 'nama');
+    final prodiId = _requiredCell(row, 'prodiId');
+    final sks = int.tryParse(_requiredCell(row, 'sks')) ?? 0;
+    final kategori = _kategoriFromLabel(_cell(row, 'kategori'));
+    final bobotTugas = double.tryParse(_cell(row, 'bobotTugas')) ?? 25;
+    final bobotUts = double.tryParse(_cell(row, 'bobotUts')) ?? 25;
+    final bobotUas = double.tryParse(_cell(row, 'bobotUas')) ?? 35;
+    final bobotSoftskill = double.tryParse(_cell(row, 'bobotSoftskill')) ?? 15;
+    if (sks <= 0) throw StateError('SKS harus lebih dari 0');
+    _ensureExists(_prodi.any((item) => item.id == prodiId), 'Prodi');
+    _ensureBobotNilaiValid(
+      bobotTugas: bobotTugas,
+      bobotUts: bobotUts,
+      bobotUas: bobotUas,
+      bobotSoftskill: bobotSoftskill,
+    );
+
+    final existingIndex = _mataKuliah.indexWhere((item) => item.kode == kode);
+    final mataKuliah = MataKuliah(
+      kode: kode,
+      nama: nama,
+      sks: sks,
+      prodiId: prodiId,
+      kategori: kategori,
+      bobotTugas: bobotTugas,
+      bobotUts: bobotUts,
+      bobotUas: bobotUas,
+      bobotSoftskill: bobotSoftskill,
+    );
+
+    if (existingIndex == -1) {
+      _mataKuliah.add(mataKuliah);
+      return _ImportAction.created;
+    }
+    _mataKuliah[existingIndex] = mataKuliah;
+    return _ImportAction.updated;
+  }
+
+  _ImportAction _importNilaiRow(Map<String, String> row) {
+    final mahasiswaId = _cell(row, 'mahasiswaId');
+    final kelasId = _cell(row, 'kelasId');
+    if (mahasiswaId.isEmpty || kelasId.isEmpty) return _ImportAction.skipped;
+    final kelas = _kelasById[kelasId];
+    if (kelas == null) throw StateError('Kelas tidak ditemukan');
+    final dosenId = _cell(row, 'dosenId', fallback: kelas.dosenId);
+    final before = _nilai.any(
+      (item) => item.mahasiswaId == mahasiswaId && item.kelasId == kelasId,
+    );
+    inputNilai(
+      dosenId: dosenId,
+      mahasiswaId: mahasiswaId,
+      kelasId: kelasId,
+      angka: double.tryParse(_cell(row, 'nilaiAkhir', fallback: '0')) ?? 0,
+      tugas: double.tryParse(_cell(row, 'nilaiTugas')),
+      uts: double.tryParse(_cell(row, 'nilaiUts')),
+      uas: double.tryParse(_cell(row, 'nilaiUas')),
+      softskill: double.tryParse(_cell(row, 'nilaiSoftskill')),
+    );
+    return before ? _ImportAction.updated : _ImportAction.created;
+  }
+
+  List<String> _academicCsvHeaders(AcademicExportType type) {
+    return switch (type) {
+      AcademicExportType.mahasiswa => [
+        'nim',
+        'nama',
+        'jenisKelamin',
+        'prodiId',
+        'pembimbingAkademikId',
+        'password',
+        'semester',
+        'email',
+        'noHp',
+        'alamat',
+        'status',
+      ],
+      AcademicExportType.dosen => [
+        'nidn',
+        'nama',
+        'prodiId',
+        'password',
+        'email',
+        'noHp',
+        'alamat',
+        'keahlian',
+      ],
+      AcademicExportType.mataKuliah => [
+        'kode',
+        'nama',
+        'sks',
+        'prodiId',
+        'kategori',
+        'bobotTugas',
+        'bobotUts',
+        'bobotUas',
+        'bobotSoftskill',
+      ],
+      AcademicExportType.nilai => [
+        'mahasiswaId',
+        'kelasId',
+        'dosenId',
+        'mataKuliahId',
+        'nilaiTugas',
+        'nilaiUts',
+        'nilaiUas',
+        'nilaiSoftskill',
+        'nilaiAkhir',
+        'nilaiHuruf',
+        'tahunAjaranId',
+      ],
+    };
+  }
+
+  String _csvRows(Iterable<Iterable<Object?>> rows) {
+    return rows.map((row) => row.map(_csvCell).join(',')).join('\r\n');
+  }
+
+  String _csvCell(Object? value) {
+    final text = '${value ?? ''}';
+    final escaped = text.replaceAll('"', '""');
+    return RegExp(r'[",\r\n]').hasMatch(escaped) ? '"$escaped"' : escaped;
+  }
+
+  String _cell(Map<String, String> row, String key, {String fallback = ''}) {
+    final direct = row[key];
+    if (direct != null) return direct.trim();
+    final normalizedKey = _normalizeImportHeader(key);
+    for (final entry in row.entries) {
+      if (_normalizeImportHeader(entry.key) == normalizedKey) {
+        return entry.value.trim();
+      }
+    }
+    return fallback;
+  }
+
+  String _requiredCell(Map<String, String> row, String key) {
+    final value = _cell(row, key);
+    if (value.isEmpty) throw StateError('Kolom $key wajib diisi');
+    return value;
+  }
+
+  String _normalizeImportHeader(String value) {
+    return value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+  }
+
+  StatusMahasiswa _statusMahasiswaFromLabel(String value) {
+    final normalized = _normalizeImportHeader(value);
+    return StatusMahasiswa.values.firstWhere(
+      (item) =>
+          _normalizeImportHeader(item.name) == normalized ||
+          _normalizeImportHeader(item.label) == normalized,
+      orElse: () => StatusMahasiswa.aktif,
+    );
+  }
+
+  KategoriMataKuliah _kategoriFromLabel(String value) {
+    final normalized = _normalizeImportHeader(value);
+    return KategoriMataKuliah.values.firstWhere(
+      (item) =>
+          _normalizeImportHeader(item.name) == normalized ||
+          _normalizeImportHeader(item.label) == normalized,
+      orElse: () => KategoriMataKuliah.reguler,
+    );
   }
 
   String addFakultas(String nama, String adminUsername, String adminPassword) {
@@ -836,17 +1270,43 @@ class MockService {
     return _saved('${role.label} berhasil ditambahkan');
   }
 
-  String addMataKuliah(String kode, String nama, int sks, String prodiId) {
+  String addMataKuliah(
+    String kode,
+    String nama,
+    int sks,
+    String prodiId, {
+    KategoriMataKuliah kategori = KategoriMataKuliah.reguler,
+    double bobotTugas = 25,
+    double bobotUts = 25,
+    double bobotUas = 35,
+    double bobotSoftskill = 15,
+  }) {
     // Mata kuliah menjadi dasar pembukaan kelas kuliah.
     _ensureNotBlank(kode, 'Kode mata kuliah');
     _ensureNotBlank(nama, 'Nama mata kuliah');
     if (sks <= 0) throw StateError('SKS harus lebih dari 0');
+    _ensureBobotNilaiValid(
+      bobotTugas: bobotTugas,
+      bobotUts: bobotUts,
+      bobotUas: bobotUas,
+      bobotSoftskill: bobotSoftskill,
+    );
     _ensureExists(_prodi.any((item) => item.id == prodiId), 'Prodi');
     if (_mataKuliah.any((item) => item.kode == kode)) {
       throw StateError('Kode mata kuliah sudah ada');
     }
     _mataKuliah.add(
-      MataKuliah(kode: kode, nama: nama, sks: sks, prodiId: prodiId),
+      MataKuliah(
+        kode: kode,
+        nama: nama,
+        sks: sks,
+        prodiId: prodiId,
+        kategori: kategori,
+        bobotTugas: bobotTugas,
+        bobotUts: bobotUts,
+        bobotUas: bobotUas,
+        bobotSoftskill: bobotSoftskill,
+      ),
     );
     return _saved('Mata kuliah berhasil ditambahkan');
   }
@@ -856,9 +1316,20 @@ class MockService {
     required String nama,
     required int sks,
     required String prodiId,
+    required KategoriMataKuliah kategori,
+    required double bobotTugas,
+    required double bobotUts,
+    required double bobotUas,
+    required double bobotSoftskill,
   }) {
     _ensureNotBlank(nama, 'Nama mata kuliah');
     if (sks <= 0) throw StateError('SKS harus lebih dari 0');
+    _ensureBobotNilaiValid(
+      bobotTugas: bobotTugas,
+      bobotUts: bobotUts,
+      bobotUas: bobotUas,
+      bobotSoftskill: bobotSoftskill,
+    );
     final index = _mataKuliah.indexWhere((item) => item.kode == kode);
     if (index == -1) throw StateError('Mata kuliah tidak ditemukan');
     _mataKuliah[index] = MataKuliah(
@@ -866,6 +1337,11 @@ class MockService {
       nama: nama,
       sks: sks,
       prodiId: prodiId,
+      kategori: kategori,
+      bobotTugas: bobotTugas,
+      bobotUts: bobotUts,
+      bobotUas: bobotUas,
+      bobotSoftskill: bobotSoftskill,
     );
     return _saved('Mata kuliah berhasil diperbarui');
   }
@@ -1110,6 +1586,28 @@ class MockService {
     )) {
       throw StateError('Kelas sudah ada di KRS');
     }
+    final krsSemesterIni = _krs.where(
+      (item) =>
+          item.mahasiswaId == mahasiswaId &&
+          item.semester == mahasiswa.semester &&
+          item.tahunAjaranId == kelas.tahunAjaranId,
+    );
+    var totalSks = mataKuliah.sks;
+    for (final item in krsSemesterIni) {
+      final existingKelas = _kelasById[item.kelasId];
+      final existingMk = existingKelas == null
+          ? null
+          : _mataKuliahByKode[existingKelas.mataKuliahId];
+      totalSks += existingMk?.sks ?? 0;
+      if (existingKelas != null &&
+          existingKelas.hari.toLowerCase() == kelas.hari.trim().toLowerCase() &&
+          _isJamBentrok(existingKelas.jam, kelas.jam)) {
+        throw StateError('Jadwal kelas bentrok dengan KRS yang sudah dipilih');
+      }
+    }
+    if (totalSks > 24) {
+      throw StateError('Total KRS maksimal 24 SKS');
+    }
     if (_krs.any(
       (item) =>
           item.mahasiswaId == mahasiswaId &&
@@ -1280,20 +1778,38 @@ class MockService {
     _nilai.removeWhere(
       (item) => item.mahasiswaId == mahasiswaId && item.kelasId == kelasId,
     );
+    final mataKuliah = _mataKuliahByKode[kelas.mataKuliahId];
+    final nilaiTugas = tugas ?? angka;
+    final nilaiUts = uts ?? angka;
+    final nilaiUas = uas ?? angka;
+    final nilaiSoftskill = softskill ?? angka;
+    final bobotTugas = mataKuliah?.bobotTugas ?? 25;
+    final bobotUts = mataKuliah?.bobotUts ?? 25;
+    final bobotUas = mataKuliah?.bobotUas ?? 35;
+    final bobotSoftskill = mataKuliah?.bobotSoftskill ?? 15;
+    final nilaiAkhir =
+        nilaiTugas * bobotTugas / 100 +
+        nilaiUts * bobotUts / 100 +
+        nilaiUas * bobotUas / 100 +
+        nilaiSoftskill * bobotSoftskill / 100;
     _nilai.add(
       Nilai(
         id: _nextId('n', _nilai.length),
         mahasiswaId: mahasiswaId,
         kelasId: kelasId,
-        nilaiAngka: angka,
-        nilaiHuruf: _huruf(angka),
+        nilaiAngka: nilaiAkhir,
+        nilaiHuruf: _huruf(nilaiAkhir),
         semester: _mahasiswa
             .firstWhere((item) => item.nim == mahasiswaId)
             .semester,
-        nilaiTugas: tugas ?? angka,
-        nilaiUts: uts ?? angka,
-        nilaiUas: uas ?? angka,
-        nilaiSoftskill: softskill ?? angka,
+        nilaiTugas: nilaiTugas,
+        nilaiUts: nilaiUts,
+        nilaiUas: nilaiUas,
+        nilaiSoftskill: nilaiSoftskill,
+        bobotTugas: bobotTugas,
+        bobotUts: bobotUts,
+        bobotUas: bobotUas,
+        bobotSoftskill: bobotSoftskill,
         tahunAjaranId: kelas.tahunAjaranId,
       ),
     );
@@ -1532,6 +2048,7 @@ class MockService {
       'presensiDosen',
       _presensiDosenFromJson,
     );
+    _replaceFromSeed(_activityLogs, seed, 'activityLogs', _activityLogFromJson);
   }
 
   void _replaceFromSeed<T>(
@@ -1624,6 +2141,9 @@ class MockService {
     _presensiDosen
       ..clear()
       ..addAll(_readList(state, 'presensiDosen', _presensiDosenFromJson));
+    _activityLogs
+      ..clear()
+      ..addAll(_readList(state, 'activityLogs', _activityLogFromJson));
   }
 
   List<T> _readList<T>(
@@ -1724,10 +2244,17 @@ class MockService {
       'pertemuan': _pertemuan.map(_pertemuanToJson).toList(),
       'presensi': _presensi.map(_presensiToJson).toList(),
       'presensiDosen': _presensiDosen.map(_presensiDosenToJson).toList(),
+      'activityLogs': _activityLogs.map(_activityLogToJson).toList(),
     });
   }
 
   String _saved(String message) {
+    _addActivityLog(
+      actor: null,
+      action: 'Perubahan Data',
+      target: 'SIAKAD',
+      description: message,
+    );
     _rebuildIndexes();
     _saveDelta();
     return message;
@@ -1743,9 +2270,39 @@ class MockService {
     List<_RowUpsert> upserts = const [],
     List<_RowDelete> deletes = const [],
   }) {
+    _addActivityLog(
+      actor: null,
+      action: 'Perubahan Data',
+      target: 'SIAKAD',
+      description: message,
+    );
     _rebuildIndexes();
     _saveRows(upserts: upserts, deletes: deletes);
     return message;
+  }
+
+  void _addActivityLog({
+    required User? actor,
+    required String action,
+    required String target,
+    required String description,
+  }) {
+    final now = DateTime.now();
+    _activityLogs.add(
+      ActivityLog(
+        id: 'log-${now.microsecondsSinceEpoch}',
+        actorId: actor?.id ?? 'system',
+        actorName: actor?.name ?? 'Sistem',
+        role: actor?.role.label ?? 'System',
+        action: action,
+        target: target,
+        description: description,
+        createdAt: now,
+      ),
+    );
+    if (_activityLogs.length > 500) {
+      _activityLogs.removeRange(0, _activityLogs.length - 500);
+    }
   }
 
   _RowUpsert _rowUpsert(String tableName, Map<String, Object?> row) {
@@ -1828,6 +2385,9 @@ class MockService {
       ),
       'presensi_dosen': _TableSnapshot(
         rows(_presensiDosen, (item) => item.id, _presensiDosenToJson),
+      ),
+      'activity_log': _TableSnapshot(
+        rows(_activityLogs, (item) => item.id, _activityLogToJson),
       ),
     };
   }
@@ -2025,6 +2585,11 @@ class MockService {
     'nama': item.nama,
     'sks': item.sks,
     'prodiId': item.prodiId,
+    'kategori': item.kategori.name,
+    'bobotTugas': item.bobotTugas,
+    'bobotUts': item.bobotUts,
+    'bobotUas': item.bobotUas,
+    'bobotSoftskill': item.bobotSoftskill,
   };
 
   MataKuliah _mataKuliahFromJson(Map<String, dynamic> json) => MataKuliah(
@@ -2032,6 +2597,14 @@ class MockService {
     nama: json['nama'] as String,
     sks: json['sks'] as int,
     prodiId: json['prodiId'] as String,
+    kategori: KategoriMataKuliah.values.firstWhere(
+      (item) => item.name == json['kategori'],
+      orElse: () => KategoriMataKuliah.reguler,
+    ),
+    bobotTugas: (json['bobotTugas'] as num? ?? 25).toDouble(),
+    bobotUts: (json['bobotUts'] as num? ?? 25).toDouble(),
+    bobotUas: (json['bobotUas'] as num? ?? 35).toDouble(),
+    bobotSoftskill: (json['bobotSoftskill'] as num? ?? 15).toDouble(),
   );
 
   Map<String, Object?> _ruanganToJson(Ruangan item) => {
@@ -2273,6 +2846,28 @@ class MockService {
         waktuPresensi: _dateFromJson(json['waktuPresensi']),
         catatan: json['catatan'] as String? ?? '',
       );
+
+  Map<String, Object?> _activityLogToJson(ActivityLog item) => {
+    'id': item.id,
+    'actorId': item.actorId,
+    'actorName': item.actorName,
+    'role': item.role,
+    'action': item.action,
+    'target': item.target,
+    'description': item.description,
+    'createdAt': item.createdAt.toIso8601String(),
+  };
+
+  ActivityLog _activityLogFromJson(Map<String, dynamic> json) => ActivityLog(
+    id: json['id'] as String,
+    actorId: json['actorId'] as String? ?? 'system',
+    actorName: json['actorName'] as String? ?? 'Sistem',
+    role: json['role'] as String? ?? 'System',
+    action: json['action'] as String? ?? 'Aktivitas',
+    target: json['target'] as String? ?? 'SIAKAD',
+    description: json['description'] as String? ?? '',
+    createdAt: _dateFromJson(json['createdAt']),
+  );
 
   void _ensureDosenPaValid(String prodiId, String dosenId) {
     _ensureNotBlank(dosenId, 'Dosen PA');
@@ -2663,6 +3258,22 @@ class MockService {
   void _ensureExists(bool exists, String label) {
     // Dipakai untuk memastikan relasi data yang dipilih benar-benar ada.
     if (!exists) throw StateError('$label tidak ditemukan');
+  }
+
+  void _ensureBobotNilaiValid({
+    required double bobotTugas,
+    required double bobotUts,
+    required double bobotUas,
+    required double bobotSoftskill,
+  }) {
+    final weights = [bobotTugas, bobotUts, bobotUas, bobotSoftskill];
+    if (weights.any((item) => item < 0 || item > 100)) {
+      throw StateError('Bobot nilai harus berada pada rentang 0-100');
+    }
+    final total = weights.fold<double>(0, (sum, item) => sum + item);
+    if ((total - 100).abs() > 0.01) {
+      throw StateError('Total bobot nilai harus 100%');
+    }
   }
 
   String _nextId(String prefix, int length) {

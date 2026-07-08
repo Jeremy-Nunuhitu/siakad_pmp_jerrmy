@@ -42,6 +42,21 @@ extension RoleLabel on Role {
   }
 }
 
+enum KategoriMataKuliah { reguler, praktikum, caseMethod }
+
+extension KategoriMataKuliahLabel on KategoriMataKuliah {
+  String get label {
+    switch (this) {
+      case KategoriMataKuliah.reguler:
+        return 'Reguler';
+      case KategoriMataKuliah.praktikum:
+        return 'Praktikum';
+      case KategoriMataKuliah.caseMethod:
+        return 'Case Method';
+    }
+  }
+}
+
 class User {
   const User({
     required this.id,
@@ -292,12 +307,48 @@ class MataKuliah {
     required this.nama,
     required this.sks,
     required this.prodiId,
+    this.kategori = KategoriMataKuliah.reguler,
+    this.bobotTugas = 25,
+    this.bobotUts = 25,
+    this.bobotUas = 35,
+    this.bobotSoftskill = 15,
   });
 
   final String kode;
   final String nama;
   final int sks;
   final String prodiId;
+  final KategoriMataKuliah kategori;
+  final double bobotTugas;
+  final double bobotUts;
+  final double bobotUas;
+  final double bobotSoftskill;
+
+  double get totalBobot => bobotTugas + bobotUts + bobotUas + bobotSoftskill;
+
+  MataKuliah copyWith({
+    String? kode,
+    String? nama,
+    int? sks,
+    String? prodiId,
+    KategoriMataKuliah? kategori,
+    double? bobotTugas,
+    double? bobotUts,
+    double? bobotUas,
+    double? bobotSoftskill,
+  }) {
+    return MataKuliah(
+      kode: kode ?? this.kode,
+      nama: nama ?? this.nama,
+      sks: sks ?? this.sks,
+      prodiId: prodiId ?? this.prodiId,
+      kategori: kategori ?? this.kategori,
+      bobotTugas: bobotTugas ?? this.bobotTugas,
+      bobotUts: bobotUts ?? this.bobotUts,
+      bobotUas: bobotUas ?? this.bobotUas,
+      bobotSoftskill: bobotSoftskill ?? this.bobotSoftskill,
+    );
+  }
 }
 
 class Kelas {
@@ -660,4 +711,26 @@ class PresensiDosen {
   final String statusKehadiran;
   final DateTime waktuPresensi;
   final String catatan;
+}
+
+class ActivityLog {
+  const ActivityLog({
+    required this.id,
+    required this.actorId,
+    required this.actorName,
+    required this.role,
+    required this.action,
+    required this.target,
+    required this.description,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String actorId;
+  final String actorName;
+  final String role;
+  final String action;
+  final String target;
+  final String description;
+  final DateTime createdAt;
 }
