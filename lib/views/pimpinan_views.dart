@@ -5343,9 +5343,12 @@ class PimpinanDataView extends StatefulWidget {
 }
 
 class _PimpinanDataViewState extends State<PimpinanDataView> {
+  static const _mahasiswaPageSize = 10;
+
   _PimpinanDataMenu selectedMenu = _PimpinanDataMenu.mahasiswa;
   String? fakultasId;
   String? prodiId;
+  int _mahasiswaPage = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -5365,9 +5368,9 @@ class _PimpinanDataViewState extends State<PimpinanDataView> {
           (prodiId == null || item.id == prodiId);
     }).toList();
     final filteredProdiIds = filteredProdi.map((item) => item.id).toSet();
-    final mahasiswa = service.mahasiswa
+    final mahasiswaCount = service.mahasiswa
         .where((item) => filteredProdiIds.contains(item.prodiId))
-        .toList();
+        .length;
     final dosen = service.dosen
         .where((item) => filteredProdiIds.contains(item.prodiId))
         .toList();
@@ -5401,19 +5404,7 @@ class _PimpinanDataViewState extends State<PimpinanDataView> {
     }
 
     final listChildren = switch (selectedMenu) {
-      _PimpinanDataMenu.mahasiswa =>
-        mahasiswa
-            .map(
-              (item) => ListTile(
-                leading: const Icon(Icons.person_outline),
-                title: Text(item.nama),
-                subtitle: Text(
-                  '${item.nim} - ${item.status.label}\n${scopeLabel(item.prodiId)}',
-                ),
-                isThreeLine: true,
-              ),
-            )
-            .toList(),
+      _PimpinanDataMenu.mahasiswa => const <Widget>[],
       _PimpinanDataMenu.dosen =>
         dosen
             .map(
@@ -5499,6 +5490,7 @@ class _PimpinanDataViewState extends State<PimpinanDataView> {
                             label: Text(menu.label),
                             onSelected: (_) => setState(() {
                               selectedMenu = menu;
+                              _mahasiswaPage = 0;
                             }),
                           ),
                         )
@@ -5531,6 +5523,7 @@ class _PimpinanDataViewState extends State<PimpinanDataView> {
                     onChanged: (value) => setState(() {
                       fakultasId = value;
                       prodiId = null;
+                      _mahasiswaPage = 0;
                     }),
                   ),
                   _Filter<String>(
@@ -5549,12 +5542,16 @@ class _PimpinanDataViewState extends State<PimpinanDataView> {
                           ),
                         )
                         .toList(),
-                    onChanged: (value) => setState(() => prodiId = value),
+                    onChanged: (value) => setState(() {
+                      prodiId = value;
+                      _mahasiswaPage = 0;
+                    }),
                   ),
                   OutlinedButton.icon(
                     onPressed: () => setState(() {
                       fakultasId = null;
                       prodiId = null;
+                      _mahasiswaPage = 0;
                     }),
                     icon: const Icon(Icons.refresh),
                     label: const Text('Reset Filter'),
@@ -5564,49 +5561,135 @@ class _PimpinanDataViewState extends State<PimpinanDataView> {
             ),
           ),
           const SizedBox(height: 12),
-          _PimpinanDataList(
-            title: selectedMenu.label,
-            count: listChildren.length,
-            children: listChildren,
-          ),
+          if (selectedMenu == _PimpinanDataMenu.mahasiswa)
+            _PagedPimpinanMahasiswaList(
+              service: service,
+              page: _mahasiswaPage,
+              pageSize: _mahasiswaPageSize,
+              count: mahasiswaCount,
+              prodiIds: filteredProdiIds,
+              scopeLabel: scopeLabel,
+              onPrevious: () => setState(() => _mahasiswaPage--),
+              onNext: () => setState(() => _mahasiswaPage++),
+            )
+          else
+            _PimpinanDataList(
+              title: selectedMenu.label,
+              count: listChildren.length,
+              children: listChildren,
+            ),
         ],
       ),
     );
   }
 }
 
-class PimpinanKrsView extends StatelessWidget {
+class PimpinanKrsView extends StatefulWidget {
   const PimpinanKrsView({this.user, super.key});
 
   final User? user;
 
   @override
+  State<PimpinanKrsView> createState() => _PimpinanKrsViewState();
+}
+
+class _PimpinanKrsViewState extends State<PimpinanKrsView> {
+  static const _pageSize = 10;
+
+  int _page = 0;
+
+  @override
   Widget build(BuildContext context) {
     final service = context.read<MockService>();
-    final allowedProdiIds = _allowedProdiIds(service, user);
-    final allowedMahasiswaIds = service.mahasiswa
-        .where((item) => allowedProdiIds.contains(item.prodiId))
-        .map((item) => item.nim)
-        .toSet();
-    final krs = service.krs
-        .where((item) => allowedMahasiswaIds.contains(item.mahasiswaId))
-        .toList();
+    final allowedProdiIds = _allowedProdiIds(service, widget.user);
     return AppScaffold(
       title: 'Monitoring KRS',
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const _ReadOnlyNotice(),
           const SizedBox(height: 12),
-          for (final item in krs)
-            Card(
-              child: ListTile(
-                title: Text(service.getMahasiswaName(item.mahasiswaId)),
-                subtitle: Text(
-                  '${service.getMataKuliahName(service.kelas.firstWhere((k) => k.id == item.kelasId).mataKuliahId)} - Semester ${item.semester}',
-                ),
-                trailing: Chip(label: Text(_krsStatus(item))),
-              ),
+          FutureBuilder<PagedKrsResult>(
+            future: service.fetchKrsPage(
+              page: _page,
+              pageSize: _pageSize,
+              prodiIds: allowedProdiIds,
             ),
+            builder: (context, snapshot) {
+              final result = snapshot.data;
+              final items = result?.items ?? const <PagedKrsItem>[];
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Card(
+                  child: ListTile(
+                    leading: SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    title: Text('Memuat 10 data KRS...'),
+                  ),
+                );
+              }
+              if (snapshot.hasError) {
+                return Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.error_outline),
+                    title: const Text('Gagal memuat data KRS'),
+                    subtitle: Text('${snapshot.error}'),
+                  ),
+                );
+              }
+              if (items.isEmpty) {
+                return const Card(
+                  child: ListTile(title: Text('Belum ada data KRS')),
+                );
+              }
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final item in items)
+                    Card(
+                      child: ListTile(
+                        title: Text(item.mahasiswaName),
+                        subtitle: Text(
+                          '${item.mataKuliahName} - Semester ${item.krs.semester}',
+                        ),
+                        trailing: Chip(label: Text(_krsStatus(item.krs))),
+                      ),
+                    ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 8, 96),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Halaman ${_page + 1} - ${items.length} dari maks. $_pageSize data',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Halaman sebelumnya',
+                          onPressed: result?.hasPrevious == true
+                              ? () => setState(() => _page--)
+                              : null,
+                          icon: const Icon(Icons.chevron_left_rounded),
+                        ),
+                        IconButton(
+                          tooltip: 'Halaman berikutnya',
+                          onPressed: result?.hasNext == true
+                              ? () => setState(() => _page++)
+                              : null,
+                          icon: const Icon(Icons.chevron_right_rounded),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
         ],
       ),
     );
@@ -6301,6 +6384,118 @@ class _ReadOnlyNotice extends StatelessWidget {
       ),
     ),
   );
+}
+
+class _PagedPimpinanMahasiswaList extends StatelessWidget {
+  const _PagedPimpinanMahasiswaList({
+    required this.service,
+    required this.page,
+    required this.pageSize,
+    required this.count,
+    required this.prodiIds,
+    required this.scopeLabel,
+    required this.onPrevious,
+    required this.onNext,
+  });
+
+  final MockService service;
+  final int page;
+  final int pageSize;
+  final int count;
+  final Set<String> prodiIds;
+  final String Function(String prodiId) scopeLabel;
+  final VoidCallback onPrevious;
+  final VoidCallback onNext;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<PagedMahasiswaResult>(
+      future: service.fetchMahasiswaPage(
+        page: page,
+        pageSize: pageSize,
+        prodiIds: prodiIds,
+      ),
+      builder: (context, snapshot) {
+        final result = snapshot.data;
+        final children = result?.items ?? const <Mahasiswa>[];
+        return Card(
+          margin: const EdgeInsets.only(bottom: 14),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                ListTile(
+                  title: const Text(
+                    'Data Mahasiswa',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  trailing: Chip(label: Text('$count data')),
+                ),
+                const Divider(height: 1),
+                if (snapshot.connectionState == ConnectionState.waiting)
+                  const ListTile(
+                    leading: SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    title: Text('Memuat 10 data mahasiswa...'),
+                  )
+                else if (snapshot.hasError)
+                  ListTile(
+                    leading: const Icon(Icons.error_outline),
+                    title: const Text('Gagal memuat data mahasiswa'),
+                    subtitle: Text('${snapshot.error}'),
+                  )
+                else if (children.isEmpty)
+                  const ListTile(title: Text('Belum ada data untuk filter ini'))
+                else ...[
+                  for (final item in children)
+                    ListTile(
+                      leading: const Icon(Icons.person_outline),
+                      title: Text(item.nama),
+                      subtitle: Text(
+                        '${item.nim} - ${item.status.label}\n'
+                        '${scopeLabel(item.prodiId)}',
+                      ),
+                      isThreeLine: true,
+                    ),
+                  const Divider(height: 1),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Halaman ${page + 1} - ${children.length} dari maks. $pageSize data',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Halaman sebelumnya',
+                          onPressed: result?.hasPrevious == true
+                              ? onPrevious
+                              : null,
+                          icon: const Icon(Icons.chevron_left_rounded),
+                        ),
+                        IconButton(
+                          tooltip: 'Halaman berikutnya',
+                          onPressed: result?.hasNext == true ? onNext : null,
+                          icon: const Icon(Icons.chevron_right_rounded),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
 
 class _PimpinanDataList extends StatelessWidget {

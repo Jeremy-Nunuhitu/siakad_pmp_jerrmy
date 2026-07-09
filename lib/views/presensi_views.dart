@@ -5,6 +5,7 @@ import '../models/siakad_models.dart';
 import '../services/mock_service.dart';
 import '../utils/app_helpers.dart';
 import '../widgets/app_scaffold.dart';
+import '../widgets/presensi_rekap_table.dart';
 
 class MahasiswaPresensiView extends StatefulWidget {
   const MahasiswaPresensiView({required this.mahasiswaId, super.key});
@@ -33,12 +34,22 @@ class _MahasiswaPresensiViewState extends State<MahasiswaPresensiView> {
     final riwayat = service.presensi
         .where((item) => item.mahasiswaId == widget.mahasiswaId)
         .toList();
+    final rekap = buildMahasiswaPresensiRekap(
+      service: service,
+      mahasiswaId: widget.mahasiswaId,
+    );
 
     return AppScaffold(
       title: 'Presensi Mahasiswa',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          PresensiRekapTable(
+            title: 'Rekap Presensi Semester Aktif',
+            subtitle: service.tahunAjaranAktif.label,
+            rows: rekap,
+          ),
+          const SizedBox(height: 16),
           _PersentaseKehadiran(
             kelasIds: kelasIds,
             mahasiswaId: widget.mahasiswaId,

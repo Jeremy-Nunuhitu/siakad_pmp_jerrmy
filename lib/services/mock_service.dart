@@ -22,17 +22,47 @@ class DemoAccount {
   final String role;
 }
 
-enum AcademicExportType { mahasiswa, dosen, mataKuliah, nilai }
+enum AcademicExportType {
+  fakultas,
+  prodi,
+  ruangan,
+  dosen,
+  mahasiswa,
+  mataKuliah,
+  kelas,
+  nilai,
+}
+
+enum AcademicImportMode { createOnly, upsert }
+
+extension AcademicImportModeLabel on AcademicImportMode {
+  String get label {
+    switch (this) {
+      case AcademicImportMode.createOnly:
+        return 'Tambah saja';
+      case AcademicImportMode.upsert:
+        return 'Tambah + Update';
+    }
+  }
+}
 
 extension AcademicExportTypeLabel on AcademicExportType {
   String get label {
     switch (this) {
+      case AcademicExportType.fakultas:
+        return 'Fakultas';
+      case AcademicExportType.prodi:
+        return 'Prodi';
+      case AcademicExportType.ruangan:
+        return 'Ruangan';
       case AcademicExportType.mahasiswa:
         return 'Mahasiswa';
       case AcademicExportType.dosen:
         return 'Dosen';
       case AcademicExportType.mataKuliah:
         return 'Mata Kuliah';
+      case AcademicExportType.kelas:
+        return 'Kelas';
       case AcademicExportType.nilai:
         return 'Nilai';
     }
@@ -40,14 +70,43 @@ extension AcademicExportTypeLabel on AcademicExportType {
 
   String get fileName {
     switch (this) {
+      case AcademicExportType.fakultas:
+        return 'template_fakultas.csv';
+      case AcademicExportType.prodi:
+        return 'template_prodi.csv';
+      case AcademicExportType.ruangan:
+        return 'template_ruangan.csv';
       case AcademicExportType.mahasiswa:
         return 'template_mahasiswa.csv';
       case AcademicExportType.dosen:
         return 'template_dosen.csv';
       case AcademicExportType.mataKuliah:
         return 'template_mata_kuliah.csv';
+      case AcademicExportType.kelas:
+        return 'template_kelas.csv';
       case AcademicExportType.nilai:
         return 'template_nilai.csv';
+    }
+  }
+
+  String get sheetName {
+    switch (this) {
+      case AcademicExportType.fakultas:
+        return 'Fakultas';
+      case AcademicExportType.prodi:
+        return 'Prodi';
+      case AcademicExportType.ruangan:
+        return 'Ruangan';
+      case AcademicExportType.dosen:
+        return 'Dosen';
+      case AcademicExportType.mahasiswa:
+        return 'Mahasiswa';
+      case AcademicExportType.mataKuliah:
+        return 'MataKuliah';
+      case AcademicExportType.kelas:
+        return 'Kelas';
+      case AcademicExportType.nilai:
+        return 'Nilai';
     }
   }
 }
@@ -73,7 +132,51 @@ class AcademicImportResult {
   }
 }
 
-enum _ImportAction { created, updated, skipped }
+enum AcademicImportAction { created, updated, skipped }
+
+class AcademicImportRowPreview {
+  const AcademicImportRowPreview({
+    required this.type,
+    required this.rowNumber,
+    required this.row,
+    required this.action,
+    this.error,
+  });
+
+  final AcademicExportType type;
+  final int rowNumber;
+  final Map<String, String> row;
+  final AcademicImportAction action;
+  final String? error;
+
+  bool get hasError => error != null && error!.isNotEmpty;
+  String get sheetName => type.sheetName;
+}
+
+class AcademicImportPreview {
+  const AcademicImportPreview({required this.mode, required this.rows});
+
+  final AcademicImportMode mode;
+  final List<AcademicImportRowPreview> rows;
+
+  int get created =>
+      rows.where((item) => item.action == AcademicImportAction.created).length;
+  int get updated =>
+      rows.where((item) => item.action == AcademicImportAction.updated).length;
+  int get skipped =>
+      rows.where((item) => item.action == AcademicImportAction.skipped).length;
+  int get errors => rows.where((item) => item.hasError).length;
+  int get validRows => rows.length - errors;
+  bool get canImport => rows.isNotEmpty && errors == 0 && validRows > 0;
+
+  List<String> get errorMessages => [
+    for (final row in rows)
+      if (row.hasError) '${row.sheetName} baris ${row.rowNumber}: ${row.error}',
+  ];
+
+  String get message =>
+      'Preview: $validRows valid, $errors error, $created dibuat, $updated diperbarui';
+}
 
 class _RowUpsert {
   const _RowUpsert(this.tableName, this.row);
@@ -95,7 +198,51 @@ class _TableSnapshot {
   final Map<String, Map<String, Object?>> rows;
 }
 
-class MockService {
+class PagedMahasiswaResult {
+  const PagedMahasiswaResult({
+    required this.items,
+    required this.page,
+    required this.pageSize,
+    required this.hasNext,
+  });
+
+  final List<Mahasiswa> items;
+  final int page;
+  final int pageSize;
+  final bool hasNext;
+
+  bool get hasPrevious => page > 0;
+}
+
+class PagedKrsItem {
+  const PagedKrsItem({
+    required this.krs,
+    required this.mahasiswaName,
+    required this.mataKuliahName,
+  });
+
+  final KRS krs;
+  final String mahasiswaName;
+  final String mataKuliahName;
+}
+
+class PagedKrsResult {
+  const PagedKrsResult({
+    required this.items,
+    required this.page,
+    required this.pageSize,
+    required this.hasNext,
+  });
+
+  final List<PagedKrsItem> items;
+  final int page;
+  final int pageSize;
+  final bool hasNext;
+
+  bool get hasPrevious => page > 0;
+}
+
+class MockService extends ChangeNotifier {
   MockService._(this._client);
 
   static const _apiUrl = String.fromEnvironment(
@@ -108,6 +255,9 @@ class MockService {
   Future<void> _saveQueue = Future.value();
   Map<String, Map<String, String>> _persistedRows = {};
   Object? _lastPersistenceError;
+  Timer? _refreshTimer;
+  Future<bool>? _refreshInFlight;
+  String? _lastLoadedStateJson;
 
   Object? get lastPersistenceError => _lastPersistenceError;
   bool get hasPersistenceError => _lastPersistenceError != null;
@@ -128,7 +278,46 @@ class MockService {
       service._rebuildIndexes();
     }
     service._markCurrentRowsPersisted();
+    service._lastLoadedStateJson = service._buildStateJson();
     return service;
+  }
+
+  void startAutoRefresh({Duration interval = const Duration(seconds: 2)}) {
+    _refreshTimer?.cancel();
+    _refreshTimer = Timer.periodic(interval, (_) {
+      unawaited(refreshFromBackend());
+    });
+  }
+
+  Future<bool> refreshFromBackend() {
+    final inFlight = _refreshInFlight;
+    if (inFlight != null) {
+      return inFlight;
+    }
+
+    final refresh = () async {
+      await _saveQueue.catchError((_) {});
+      final stateJson = await _client.siakadState.getState();
+      if (stateJson == null || stateJson.isEmpty) return false;
+      if (stateJson == _lastLoadedStateJson) return false;
+
+      _loadState(_jsonMap(jsonDecode(stateJson)));
+      _rebuildIndexes();
+      _markCurrentRowsPersisted();
+      _lastLoadedStateJson = stateJson;
+      _lastPersistenceError = null;
+      notifyListeners();
+      return true;
+    }();
+
+    _refreshInFlight = refresh.whenComplete(() => _refreshInFlight = null);
+    return refresh;
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
   }
 
   // Serverpod/PostgreSQL is the source of truth. The bundled seed is imported
@@ -160,6 +349,11 @@ class MockService {
   final Map<String, User> _usersByUsername = {};
   final Map<String, Mahasiswa> _mahasiswaByNim = {};
   final Map<String, Mahasiswa> _mahasiswaByName = {};
+  final Map<int, List<Mahasiswa>> _mahasiswaBackendPages = {};
+  final Map<int, List<KRS>> _krsBackendPages = {};
+  final Map<String, Mahasiswa?> _mahasiswaBackendRows = {};
+  final Map<String, Kelas?> _kelasBackendRows = {};
+  final Map<String, MataKuliah?> _mataKuliahBackendRows = {};
   final Map<String, Dosen> _dosenByNidn = {};
   final Map<String, Dosen> _dosenByName = {};
   final Map<String, Fakultas> _fakultasById = {};
@@ -227,6 +421,11 @@ class MockService {
     _mahasiswaByName
       ..clear()
       ..addEntries(_mahasiswa.map((item) => MapEntry(item.nama, item)));
+    _mahasiswaBackendPages.clear();
+    _krsBackendPages.clear();
+    _mahasiswaBackendRows.clear();
+    _kelasBackendRows.clear();
+    _mataKuliahBackendRows.clear();
     _dosenByNidn
       ..clear()
       ..addEntries(_dosen.map((item) => MapEntry(item.nidn, item)));
@@ -553,9 +752,37 @@ class MockService {
     return _csvRows([_academicCsvHeaders(type)]);
   }
 
+  List<String> academicHeaders(AcademicExportType type) {
+    return List.unmodifiable(_academicCsvHeaders(type));
+  }
+
+  List<String> academicXlsxTemplate(AcademicExportType type) {
+    return academicHeaders(type);
+  }
+
+  Map<AcademicExportType, List<String>> academicFullWorkbookTemplate() {
+    return {
+      for (final type in AcademicExportType.values) type: academicHeaders(type),
+    };
+  }
+
   String exportAcademicCsv(AcademicExportType type) {
     final headers = _academicCsvHeaders(type);
     final rows = switch (type) {
+      AcademicExportType.fakultas => _fakultas.map(
+        (item) => [item.id, item.nama],
+      ),
+      AcademicExportType.prodi => _prodi.map(
+        (item) => [item.id, item.nama, item.fakultasId],
+      ),
+      AcademicExportType.ruangan => _ruangan.map(
+        (item) => [
+          item.kodeRuangan,
+          item.namaRuangan,
+          item.kapasitasRuangan,
+          item.lokasi,
+        ],
+      ),
       AcademicExportType.mahasiswa => _mahasiswa.map(
         (item) => [
           item.nim,
@@ -596,6 +823,20 @@ class MockService {
           item.bobotSoftskill,
         ],
       ),
+      AcademicExportType.kelas => _kelas.map(
+        (item) => [
+          item.id,
+          item.mataKuliahId,
+          getDosenPengajarKelas(
+            item.id,
+          ).map((pengajar) => pengajar.nidnDosen).join(','),
+          item.kapasitas,
+          item.hari,
+          item.jam,
+          item.ruangan,
+          item.tahunAjaranId,
+        ],
+      ),
       AcademicExportType.nilai => _nilai.map((item) {
         final kelas = _kelasById[item.kelasId];
         return [
@@ -620,43 +861,109 @@ class MockService {
     AcademicExportType type,
     List<Map<String, String>> rows,
   ) {
+    final preview = previewAcademicWorkbook(
+      {type: rows},
+      mode: AcademicImportMode.upsert,
+      strictPrimaryKey: false,
+    );
+    return importAcademicPreview(preview);
+  }
+
+  AcademicImportPreview previewAcademicWorkbook(
+    Map<AcademicExportType, List<Map<String, String>>> workbook, {
+    required AcademicImportMode mode,
+    bool strictPrimaryKey = true,
+  }) {
+    final draft = _copyForImportPreview();
+    final previews = <AcademicImportRowPreview>[];
+    for (final type in AcademicExportType.values) {
+      final rows = workbook[type] ?? const <Map<String, String>>[];
+      for (var index = 0; index < rows.length; index++) {
+        final row = rows[index];
+        var action = AcademicImportAction.skipped;
+        String? error;
+        final rowNumber = index + 2;
+        try {
+          action = draft._importAcademicRow(
+            type,
+            row,
+            mode: mode,
+            strictPrimaryKey: strictPrimaryKey,
+          );
+          draft._rebuildIndexes();
+        } on StateError catch (e) {
+          error = e.message;
+        } catch (e) {
+          error = '$e';
+        }
+        previews.add(
+          AcademicImportRowPreview(
+            type: type,
+            rowNumber: rowNumber,
+            row: Map<String, String>.from(row),
+            action: action,
+            error: error,
+          ),
+        );
+      }
+    }
+    return AcademicImportPreview(mode: mode, rows: previews);
+  }
+
+  AcademicImportResult importAcademicPreview(AcademicImportPreview preview) {
+    if (preview.errors > 0) {
+      return AcademicImportResult(
+        created: 0,
+        updated: 0,
+        skipped: preview.skipped,
+        errors: preview.errorMessages,
+      );
+    }
+
     var created = 0;
     var updated = 0;
     var skipped = 0;
     final errors = <String>[];
 
-    for (var i = 0; i < rows.length; i++) {
-      final rowNumber = i + 2;
-      final row = rows[i];
+    for (final rowPreview in preview.rows) {
       try {
-        final action = switch (type) {
-          AcademicExportType.mahasiswa => _importMahasiswaRow(row),
-          AcademicExportType.dosen => _importDosenRow(row),
-          AcademicExportType.mataKuliah => _importMataKuliahRow(row),
-          AcademicExportType.nilai => _importNilaiRow(row),
-        };
+        if (rowPreview.action == AcademicImportAction.skipped) {
+          skipped++;
+          continue;
+        }
+        final action = _importAcademicRow(
+          rowPreview.type,
+          rowPreview.row,
+          mode: preview.mode,
+          strictPrimaryKey: true,
+        );
         switch (action) {
-          case _ImportAction.created:
+          case AcademicImportAction.created:
             created++;
-          case _ImportAction.updated:
+          case AcademicImportAction.updated:
             updated++;
-          case _ImportAction.skipped:
+          case AcademicImportAction.skipped:
             skipped++;
         }
+        _rebuildIndexes();
       } on StateError catch (error) {
-        errors.add('Baris $rowNumber: ${error.message}');
+        errors.add(
+          '${rowPreview.sheetName} baris ${rowPreview.rowNumber}: ${error.message}',
+        );
       } catch (error) {
-        errors.add('Baris $rowNumber: $error');
+        errors.add(
+          '${rowPreview.sheetName} baris ${rowPreview.rowNumber}: $error',
+        );
       }
     }
 
     if (created > 0 || updated > 0) {
       _addActivityLog(
         actor: null,
-        action: 'Import Data',
-        target: type.label,
+        action: 'Import Excel',
+        target: 'Master Akademik',
         description:
-            'Import ${type.label}: $created dibuat, $updated diperbarui',
+            'Import ${preview.mode.label}: $created dibuat, $updated diperbarui',
       );
       _rebuildIndexes();
       _saveDelta();
@@ -670,9 +977,193 @@ class MockService {
     );
   }
 
-  _ImportAction _importMahasiswaRow(Map<String, String> row) {
+  MockService _copyForImportPreview() {
+    final copy = MockService._(_client);
+    copy._users.addAll(_users);
+    copy._fakultas.addAll(_fakultas);
+    copy._prodi.addAll(_prodi);
+    copy._tahunAjaran.addAll(_tahunAjaran);
+    copy._mahasiswa.addAll(_mahasiswa);
+    copy._riwayatStatusMahasiswa.addAll(_riwayatStatusMahasiswa);
+    copy._dosen.addAll(_dosen);
+    copy._mataKuliah.addAll(_mataKuliah);
+    copy._ruangan.addAll(_ruangan);
+    copy._kelas.addAll(_kelas);
+    copy._dosenPengajar.addAll(_dosenPengajar);
+    copy._krs.addAll(_krs);
+    copy._nilai.addAll(_nilai);
+    copy._tugas.addAll(_tugas);
+    copy._skripsi.addAll(_skripsi);
+    copy._magang.addAll(_magang);
+    copy._kkn.addAll(_kkn);
+    copy._pertemuan.addAll(_pertemuan);
+    copy._presensi.addAll(_presensi);
+    copy._presensiDosen.addAll(_presensiDosen);
+    copy._faseKrs.addAll(_faseKrs);
+    copy._activityLogs.addAll(_activityLogs);
+    copy._rebuildIndexes();
+    return copy;
+  }
+
+  AcademicImportAction _importAcademicRow(
+    AcademicExportType type,
+    Map<String, String> row, {
+    required AcademicImportMode mode,
+    bool strictPrimaryKey = false,
+  }) {
+    return switch (type) {
+      AcademicExportType.fakultas => _importFakultasRow(
+        row,
+        mode: mode,
+        strictPrimaryKey: strictPrimaryKey,
+      ),
+      AcademicExportType.prodi => _importProdiRow(
+        row,
+        mode: mode,
+        strictPrimaryKey: strictPrimaryKey,
+      ),
+      AcademicExportType.ruangan => _importRuanganRow(
+        row,
+        mode: mode,
+        strictPrimaryKey: strictPrimaryKey,
+      ),
+      AcademicExportType.dosen => _importDosenRow(
+        row,
+        mode: mode,
+        strictPrimaryKey: strictPrimaryKey,
+      ),
+      AcademicExportType.mahasiswa => _importMahasiswaRow(
+        row,
+        mode: mode,
+        strictPrimaryKey: strictPrimaryKey,
+      ),
+      AcademicExportType.mataKuliah => _importMataKuliahRow(
+        row,
+        mode: mode,
+        strictPrimaryKey: strictPrimaryKey,
+      ),
+      AcademicExportType.kelas => _importKelasRow(
+        row,
+        mode: mode,
+        strictPrimaryKey: strictPrimaryKey,
+      ),
+      AcademicExportType.nilai => _importNilaiRow(
+        row,
+        mode: mode,
+        strictPrimaryKey: strictPrimaryKey,
+      ),
+    };
+  }
+
+  AcademicImportAction _importFakultasRow(
+    Map<String, String> row, {
+    required AcademicImportMode mode,
+    bool strictPrimaryKey = false,
+  }) {
+    final id = _cell(row, 'id');
+    if (id.isEmpty) {
+      if (strictPrimaryKey) throw StateError('Kolom id wajib diisi');
+      return AcademicImportAction.skipped;
+    }
+    final nama = _requiredCell(row, 'nama');
+    final existingIndex = _fakultas.indexWhere((item) => item.id == id);
+    if (existingIndex != -1 && mode == AcademicImportMode.createOnly) {
+      throw StateError('Fakultas dengan id $id sudah ada');
+    }
+    final fakultas = Fakultas(id: id, nama: nama);
+    if (existingIndex == -1) {
+      _fakultas.add(fakultas);
+      return AcademicImportAction.created;
+    }
+    _fakultas[existingIndex] = fakultas;
+    return AcademicImportAction.updated;
+  }
+
+  AcademicImportAction _importProdiRow(
+    Map<String, String> row, {
+    required AcademicImportMode mode,
+    bool strictPrimaryKey = false,
+  }) {
+    final id = _cell(row, 'id');
+    if (id.isEmpty) {
+      if (strictPrimaryKey) throw StateError('Kolom id wajib diisi');
+      return AcademicImportAction.skipped;
+    }
+    final nama = _requiredCell(row, 'nama');
+    final fakultasId = _requiredCell(row, 'fakultasId');
+    _ensureExists(_fakultas.any((item) => item.id == fakultasId), 'Fakultas');
+    final existingIndex = _prodi.indexWhere((item) => item.id == id);
+    if (existingIndex != -1 && mode == AcademicImportMode.createOnly) {
+      throw StateError('Prodi dengan id $id sudah ada');
+    }
+    final prodi = Prodi(id: id, nama: nama, fakultasId: fakultasId);
+    if (existingIndex == -1) {
+      _prodi.add(prodi);
+      return AcademicImportAction.created;
+    }
+    _prodi[existingIndex] = prodi;
+    return AcademicImportAction.updated;
+  }
+
+  AcademicImportAction _importRuanganRow(
+    Map<String, String> row, {
+    required AcademicImportMode mode,
+    bool strictPrimaryKey = false,
+  }) {
+    final kode = _cell(row, 'kodeRuangan').toUpperCase();
+    if (kode.isEmpty) {
+      if (strictPrimaryKey) throw StateError('Kolom kodeRuangan wajib diisi');
+      return AcademicImportAction.skipped;
+    }
+    final nama = _requiredCell(row, 'namaRuangan');
+    final kapasitas = int.tryParse(_requiredCell(row, 'kapasitasRuangan')) ?? 0;
+    final lokasi = _requiredCell(row, 'lokasi');
+    if (kapasitas <= 0) {
+      throw StateError('Kapasitas ruangan harus lebih dari 0');
+    }
+    final existingIndex = _ruangan.indexWhere(
+      (item) => item.kodeRuangan == kode,
+    );
+    if (existingIndex != -1 && mode == AcademicImportMode.createOnly) {
+      throw StateError('Ruangan dengan kode $kode sudah ada');
+    }
+    if (existingIndex != -1) {
+      final maxKapasitasKelas = _kelas
+          .where((item) => item.ruangan == kode)
+          .fold<int>(
+            0,
+            (max, item) => item.kapasitas > max ? item.kapasitas : max,
+          );
+      if (kapasitas < maxKapasitasKelas) {
+        throw StateError(
+          'Kapasitas ruangan tidak boleh kurang dari kapasitas kelas aktif',
+        );
+      }
+    }
+    final ruangan = Ruangan(
+      kodeRuangan: kode,
+      namaRuangan: nama,
+      kapasitasRuangan: kapasitas,
+      lokasi: lokasi,
+    );
+    if (existingIndex == -1) {
+      _ruangan.add(ruangan);
+      return AcademicImportAction.created;
+    }
+    _ruangan[existingIndex] = ruangan;
+    return AcademicImportAction.updated;
+  }
+
+  AcademicImportAction _importMahasiswaRow(
+    Map<String, String> row, {
+    required AcademicImportMode mode,
+    bool strictPrimaryKey = false,
+  }) {
     final nim = _cell(row, 'nim');
-    if (nim.isEmpty) return _ImportAction.skipped;
+    if (nim.isEmpty) {
+      if (strictPrimaryKey) throw StateError('Kolom nim wajib diisi');
+      return AcademicImportAction.skipped;
+    }
     final nama = _requiredCell(row, 'nama');
     final prodiId = _requiredCell(row, 'prodiId');
     final jenisKelamin = _cell(row, 'jenisKelamin', fallback: 'L');
@@ -688,6 +1179,9 @@ class MockService {
     _ensureDosenPaValid(prodiId, resolvedPembimbing);
 
     final existingIndex = _mahasiswa.indexWhere((item) => item.nim == nim);
+    if (existingIndex != -1 && mode == AcademicImportMode.createOnly) {
+      throw StateError('Mahasiswa dengan NIM $nim sudah ada');
+    }
     final mahasiswa = Mahasiswa(
       nim: nim,
       nama: nama,
@@ -704,20 +1198,30 @@ class MockService {
 
     if (existingIndex == -1) {
       _mahasiswa.add(mahasiswa);
-      return _ImportAction.created;
+      return AcademicImportAction.created;
     }
     _mahasiswa[existingIndex] = mahasiswa;
-    return _ImportAction.updated;
+    return AcademicImportAction.updated;
   }
 
-  _ImportAction _importDosenRow(Map<String, String> row) {
+  AcademicImportAction _importDosenRow(
+    Map<String, String> row, {
+    required AcademicImportMode mode,
+    bool strictPrimaryKey = false,
+  }) {
     final nidn = _cell(row, 'nidn');
-    if (nidn.isEmpty) return _ImportAction.skipped;
+    if (nidn.isEmpty) {
+      if (strictPrimaryKey) throw StateError('Kolom nidn wajib diisi');
+      return AcademicImportAction.skipped;
+    }
     final nama = _requiredCell(row, 'nama');
     final prodiId = _requiredCell(row, 'prodiId');
     _ensureExists(_prodi.any((item) => item.id == prodiId), 'Prodi');
 
     final existingIndex = _dosen.indexWhere((item) => item.nidn == nidn);
+    if (existingIndex != -1 && mode == AcademicImportMode.createOnly) {
+      throw StateError('Dosen dengan NIDN $nidn sudah ada');
+    }
     final dosen = Dosen(
       nidn: nidn,
       nama: nama,
@@ -731,15 +1235,22 @@ class MockService {
 
     if (existingIndex == -1) {
       _dosen.add(dosen);
-      return _ImportAction.created;
+      return AcademicImportAction.created;
     }
     _dosen[existingIndex] = dosen;
-    return _ImportAction.updated;
+    return AcademicImportAction.updated;
   }
 
-  _ImportAction _importMataKuliahRow(Map<String, String> row) {
+  AcademicImportAction _importMataKuliahRow(
+    Map<String, String> row, {
+    required AcademicImportMode mode,
+    bool strictPrimaryKey = false,
+  }) {
     final kode = _cell(row, 'kode');
-    if (kode.isEmpty) return _ImportAction.skipped;
+    if (kode.isEmpty) {
+      if (strictPrimaryKey) throw StateError('Kolom kode wajib diisi');
+      return AcademicImportAction.skipped;
+    }
     final nama = _requiredCell(row, 'nama');
     final prodiId = _requiredCell(row, 'prodiId');
     final sks = int.tryParse(_requiredCell(row, 'sks')) ?? 0;
@@ -758,6 +1269,9 @@ class MockService {
     );
 
     final existingIndex = _mataKuliah.indexWhere((item) => item.kode == kode);
+    if (existingIndex != -1 && mode == AcademicImportMode.createOnly) {
+      throw StateError('Mata kuliah dengan kode $kode sudah ada');
+    }
     final mataKuliah = MataKuliah(
       kode: kode,
       nama: nama,
@@ -772,23 +1286,139 @@ class MockService {
 
     if (existingIndex == -1) {
       _mataKuliah.add(mataKuliah);
-      return _ImportAction.created;
+      return AcademicImportAction.created;
     }
     _mataKuliah[existingIndex] = mataKuliah;
-    return _ImportAction.updated;
+    return AcademicImportAction.updated;
   }
 
-  _ImportAction _importNilaiRow(Map<String, String> row) {
+  AcademicImportAction _importKelasRow(
+    Map<String, String> row, {
+    required AcademicImportMode mode,
+    bool strictPrimaryKey = false,
+  }) {
+    final id = _cell(row, 'id');
+    if (id.isEmpty) {
+      if (strictPrimaryKey) throw StateError('Kolom id wajib diisi');
+      return AcademicImportAction.skipped;
+    }
+    final mataKuliahId = _requiredCell(row, 'mataKuliahId');
+    final kapasitas = int.tryParse(_requiredCell(row, 'kapasitas')) ?? 0;
+    final hari = _requiredCell(row, 'hari');
+    final jam = _requiredCell(row, 'jam');
+    final ruangan = _requiredCell(row, 'ruangan').toUpperCase();
+    final tahunAjaranId = _cell(
+      row,
+      'tahunAjaranId',
+      fallback: tahunAjaranAktif.id,
+    );
+    final dosenIds = _cell(row, 'dosenIds')
+        .split(',')
+        .map((item) => item.trim())
+        .where((item) => item.isNotEmpty)
+        .toList();
+    if (dosenIds.isEmpty) throw StateError('Kolom dosenIds wajib diisi');
+    _ensureExists(
+      _mataKuliah.any((item) => item.kode == mataKuliahId),
+      'Mata kuliah',
+    );
+    _ensureExists(
+      _tahunAjaran.any((item) => item.id == tahunAjaranId),
+      'Tahun ajaran',
+    );
+    for (final dosenId in dosenIds) {
+      _ensureExists(_dosen.any((item) => item.nidn == dosenId), 'Dosen');
+    }
+    if (kapasitas <= 0) throw StateError('Kapasitas harus lebih dari 0');
+    final existingIndex = _kelas.indexWhere((item) => item.id == id);
+    if (existingIndex != -1 && mode == AcademicImportMode.createOnly) {
+      throw StateError('Kelas dengan id $id sudah ada');
+    }
+    if (existingIndex != -1 && kapasitas < getJumlahPesertaKelas(id)) {
+      throw StateError('Kapasitas tidak boleh kurang dari jumlah peserta');
+    }
+    _ensureRuanganAvailable(
+      kodeRuangan: ruangan,
+      kapasitasKelas: kapasitas,
+      hari: hari,
+      jam: jam,
+      ignoreKelasId: existingIndex == -1 ? null : id,
+    );
+    for (final dosenId in dosenIds) {
+      _ensureDosenAvailable(
+        dosenId: dosenId,
+        hari: hari,
+        jam: jam,
+        ignoreKelasId: existingIndex == -1 ? null : id,
+      );
+    }
+    final kelas = Kelas(
+      id: id,
+      mataKuliahId: mataKuliahId,
+      dosenId: dosenIds.first,
+      kapasitas: kapasitas,
+      hari: hari,
+      jam: jam,
+      ruangan: ruangan,
+      tahunAjaranId: tahunAjaranId,
+    );
+    if (existingIndex == -1) {
+      _kelas.add(kelas);
+      _syncDosenPengajar(id, dosenIds);
+      for (int i = 1; i <= 16; i++) {
+        _pertemuan.add(
+          Pertemuan(
+            id: 'ptm-$id-$i',
+            kelasId: id,
+            pertemuanKe: i,
+            status: StatusPertemuan.belumDimulai,
+          ),
+        );
+      }
+      return AcademicImportAction.created;
+    }
+    _kelas[existingIndex] = kelas;
+    _syncDosenPengajar(id, dosenIds);
+    for (int i = 1; i <= 16; i++) {
+      if (!_pertemuan.any(
+        (item) => item.kelasId == id && item.pertemuanKe == i,
+      )) {
+        _pertemuan.add(
+          Pertemuan(
+            id: 'ptm-$id-$i',
+            kelasId: id,
+            pertemuanKe: i,
+            status: StatusPertemuan.belumDimulai,
+          ),
+        );
+      }
+    }
+    return AcademicImportAction.updated;
+  }
+
+  AcademicImportAction _importNilaiRow(
+    Map<String, String> row, {
+    required AcademicImportMode mode,
+    bool strictPrimaryKey = false,
+  }) {
     final mahasiswaId = _cell(row, 'mahasiswaId');
     final kelasId = _cell(row, 'kelasId');
-    if (mahasiswaId.isEmpty || kelasId.isEmpty) return _ImportAction.skipped;
+    if (mahasiswaId.isEmpty || kelasId.isEmpty) {
+      if (strictPrimaryKey) {
+        throw StateError('Kolom mahasiswaId dan kelasId wajib diisi');
+      }
+      return AcademicImportAction.skipped;
+    }
     final kelas = _kelasById[kelasId];
     if (kelas == null) throw StateError('Kelas tidak ditemukan');
     final dosenId = _cell(row, 'dosenId', fallback: kelas.dosenId);
     final before = _nilai.any(
       (item) => item.mahasiswaId == mahasiswaId && item.kelasId == kelasId,
     );
-    inputNilai(
+    if (before && mode == AcademicImportMode.createOnly) {
+      throw StateError('Nilai untuk mahasiswa dan kelas ini sudah ada');
+    }
+    _upsertNilai(
       dosenId: dosenId,
       mahasiswaId: mahasiswaId,
       kelasId: kelasId,
@@ -798,11 +1428,19 @@ class MockService {
       uas: double.tryParse(_cell(row, 'nilaiUas')),
       softskill: double.tryParse(_cell(row, 'nilaiSoftskill')),
     );
-    return before ? _ImportAction.updated : _ImportAction.created;
+    return before ? AcademicImportAction.updated : AcademicImportAction.created;
   }
 
   List<String> _academicCsvHeaders(AcademicExportType type) {
     return switch (type) {
+      AcademicExportType.fakultas => ['id', 'nama'],
+      AcademicExportType.prodi => ['id', 'nama', 'fakultasId'],
+      AcademicExportType.ruangan => [
+        'kodeRuangan',
+        'namaRuangan',
+        'kapasitasRuangan',
+        'lokasi',
+      ],
       AcademicExportType.mahasiswa => [
         'nim',
         'nama',
@@ -836,6 +1474,16 @@ class MockService {
         'bobotUts',
         'bobotUas',
         'bobotSoftskill',
+      ],
+      AcademicExportType.kelas => [
+        'id',
+        'mataKuliahId',
+        'dosenIds',
+        'kapasitas',
+        'hari',
+        'jam',
+        'ruangan',
+        'tahunAjaranId',
       ],
       AcademicExportType.nilai => [
         'mahasiswaId',
@@ -1763,6 +2411,29 @@ class MockService {
     double? uas,
     double? softskill,
   }) {
+    _upsertNilai(
+      dosenId: dosenId,
+      mahasiswaId: mahasiswaId,
+      kelasId: kelasId,
+      angka: angka,
+      tugas: tugas,
+      uts: uts,
+      uas: uas,
+      softskill: softskill,
+    );
+    return _saved('Nilai berhasil disimpan');
+  }
+
+  void _upsertNilai({
+    required String dosenId,
+    required String mahasiswaId,
+    required String kelasId,
+    required double angka,
+    double? tugas,
+    double? uts,
+    double? uas,
+    double? softskill,
+  }) {
     // Nilai hanya bisa diinput oleh dosen pengampu dan untuk mahasiswa
     // yang benar-benar mengambil kelas tersebut di KRS.
     final kelas = _kelas.firstWhere((item) => item.id == kelasId);
@@ -1813,7 +2484,6 @@ class MockService {
         tahunAjaranId: kelas.tahunAjaranId,
       ),
     );
-    return _saved('Nilai berhasil disimpan');
   }
 
   String getMataKuliahName(String kode) {
@@ -1930,6 +2600,173 @@ class MockService {
       result.addAll(mahasiswaByProdiId(prodiId));
     }
     return UnmodifiableListView(result);
+  }
+
+  Future<PagedMahasiswaResult> fetchMahasiswaPage({
+    required int page,
+    int pageSize = 10,
+    Set<String>? prodiIds,
+  }) async {
+    final safePage = page < 0 ? 0 : page;
+    final safePageSize = pageSize < 1 ? 10 : pageSize;
+    final targetCount = (safePage + 1) * safePageSize + 1;
+    final matches = <Mahasiswa>[];
+    var backendPage = 0;
+    var reachedEnd = false;
+
+    while (matches.length < targetCount && !reachedEnd) {
+      final batch = await _fetchMahasiswaBackendPage(backendPage, safePageSize);
+      reachedEnd = batch.length < safePageSize;
+      for (final item in batch) {
+        if (prodiIds == null ||
+            prodiIds.isEmpty ||
+            prodiIds.contains(item.prodiId)) {
+          matches.add(item);
+          if (matches.length >= targetCount) break;
+        }
+      }
+      backendPage++;
+    }
+
+    final start = safePage * safePageSize;
+    final items = start >= matches.length
+        ? <Mahasiswa>[]
+        : matches.skip(start).take(safePageSize).toList();
+    return PagedMahasiswaResult(
+      items: items,
+      page: safePage,
+      pageSize: safePageSize,
+      hasNext: matches.length > start + safePageSize,
+    );
+  }
+
+  Future<List<Mahasiswa>> _fetchMahasiswaBackendPage(
+    int page,
+    int pageSize,
+  ) async {
+    final cached = _mahasiswaBackendPages[page];
+    if (cached != null) return cached;
+
+    final rowsJson = await _client.siakadState.listRows(
+      'mahasiswa',
+      limit: pageSize,
+      offset: page * pageSize,
+    );
+    final rows = (jsonDecode(rowsJson) as List<dynamic>)
+        .map((row) => _mahasiswaFromJson(_jsonMap(row)))
+        .toList();
+    _mahasiswaBackendPages[page] = rows;
+    return rows;
+  }
+
+  Future<PagedKrsResult> fetchKrsPage({
+    required int page,
+    int pageSize = 10,
+    Set<String>? prodiIds,
+  }) async {
+    final safePage = page < 0 ? 0 : page;
+    final safePageSize = pageSize < 1 ? 10 : pageSize;
+    final targetCount = (safePage + 1) * safePageSize + 1;
+    final matches = <KRS>[];
+    var backendPage = 0;
+    var reachedEnd = false;
+
+    while (matches.length < targetCount && !reachedEnd) {
+      final batch = await _fetchKrsBackendPage(backendPage, safePageSize);
+      reachedEnd = batch.length < safePageSize;
+      for (final item in batch) {
+        final mahasiswa = await _fetchMahasiswaBackendRow(item.mahasiswaId);
+        if (mahasiswa == null) continue;
+        if (prodiIds == null ||
+            prodiIds.isEmpty ||
+            prodiIds.contains(mahasiswa.prodiId)) {
+          matches.add(item);
+          if (matches.length >= targetCount) break;
+        }
+      }
+      backendPage++;
+    }
+
+    final start = safePage * safePageSize;
+    final krsItems = start >= matches.length
+        ? <KRS>[]
+        : matches.skip(start).take(safePageSize).toList();
+    final items = <PagedKrsItem>[];
+    for (final item in krsItems) {
+      final mahasiswa = await _fetchMahasiswaBackendRow(item.mahasiswaId);
+      final kelas = await _fetchKelasBackendRow(item.kelasId);
+      final mataKuliah = kelas == null
+          ? null
+          : await _fetchMataKuliahBackendRow(kelas.mataKuliahId);
+      items.add(
+        PagedKrsItem(
+          krs: item,
+          mahasiswaName: mahasiswa?.nama ?? item.mahasiswaId,
+          mataKuliahName:
+              mataKuliah?.nama ?? kelas?.mataKuliahId ?? item.kelasId,
+        ),
+      );
+    }
+
+    return PagedKrsResult(
+      items: items,
+      page: safePage,
+      pageSize: safePageSize,
+      hasNext: matches.length > start + safePageSize,
+    );
+  }
+
+  Future<List<KRS>> _fetchKrsBackendPage(int page, int pageSize) async {
+    final cached = _krsBackendPages[page];
+    if (cached != null) return cached;
+
+    final rowsJson = await _client.siakadState.listRows(
+      'krs',
+      limit: pageSize,
+      offset: page * pageSize,
+    );
+    final rows = (jsonDecode(rowsJson) as List<dynamic>)
+        .map((row) => _krsFromJson(_jsonMap(row)))
+        .toList();
+    _krsBackendPages[page] = rows;
+    return rows;
+  }
+
+  Future<Mahasiswa?> _fetchMahasiswaBackendRow(String nim) async {
+    if (_mahasiswaBackendRows.containsKey(nim)) {
+      return _mahasiswaBackendRows[nim];
+    }
+
+    final rowJson = await _client.siakadState.getRow('mahasiswa', nim);
+    final row = rowJson == null
+        ? null
+        : _mahasiswaFromJson(_jsonMap(jsonDecode(rowJson)));
+    _mahasiswaBackendRows[nim] = row;
+    return row;
+  }
+
+  Future<Kelas?> _fetchKelasBackendRow(String id) async {
+    if (_kelasBackendRows.containsKey(id)) return _kelasBackendRows[id];
+
+    final rowJson = await _client.siakadState.getRow('kelas', id);
+    final row = rowJson == null
+        ? null
+        : _kelasFromJson(_jsonMap(jsonDecode(rowJson)));
+    _kelasBackendRows[id] = row;
+    return row;
+  }
+
+  Future<MataKuliah?> _fetchMataKuliahBackendRow(String kode) async {
+    if (_mataKuliahBackendRows.containsKey(kode)) {
+      return _mataKuliahBackendRows[kode];
+    }
+
+    final rowJson = await _client.siakadState.getRow('mata_kuliah', kode);
+    final row = rowJson == null
+        ? null
+        : _mataKuliahFromJson(_jsonMap(jsonDecode(rowJson)));
+    _mataKuliahBackendRows[kode] = row;
+    return row;
   }
 
   List<Dosen> dosenByProdiId(String prodiId) {
@@ -2158,6 +2995,7 @@ class MockService {
   Future<void> _saveAllAsync() async {
     await _client.siakadState.saveState(_buildStateJson());
     _markCurrentRowsPersisted();
+    _lastLoadedStateJson = _buildStateJson();
     _lastPersistenceError = null;
   }
 
@@ -2209,6 +3047,7 @@ class MockService {
           jsonEncode(deletes),
         );
         _persistedRows = currentRows;
+        _lastLoadedStateJson = _buildStateJson();
         _lastPersistenceError = null;
       } catch (error, stackTrace) {
         _lastPersistenceError = error;
@@ -2257,12 +3096,14 @@ class MockService {
     );
     _rebuildIndexes();
     _saveDelta();
+    notifyListeners();
     return message;
   }
 
   void _persistChanges() {
     _rebuildIndexes();
     _saveDelta();
+    notifyListeners();
   }
 
   String _savedRows(
@@ -2278,6 +3119,7 @@ class MockService {
     );
     _rebuildIndexes();
     _saveRows(upserts: upserts, deletes: deletes);
+    notifyListeners();
     return message;
   }
 

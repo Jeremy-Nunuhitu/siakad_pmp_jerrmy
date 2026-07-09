@@ -17,6 +17,7 @@ import 'views/splash_view.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final service = await MockService.create();
+  service.startAutoRefresh();
   // Titik awal aplikasi: Flutter akan membangun widget SiakadApp.
   runApp(SiakadApp(service: service));
 }
@@ -34,7 +35,7 @@ class SiakadApp extends StatelessWidget {
       providers: [
         // Provider di bawah membentuk alur data:
         // View membaca ViewModel, lalu ViewModel memanggil MockService.
-        Provider<MockService>.value(value: service),
+        ChangeNotifierProvider<MockService>.value(value: service),
         ChangeNotifierProvider(create: (_) => ThemeViewModel()),
         ChangeNotifierProvider(create: (_) => AuthViewModel(service)),
         ChangeNotifierProvider(create: (_) => FakultasViewModel(service)),

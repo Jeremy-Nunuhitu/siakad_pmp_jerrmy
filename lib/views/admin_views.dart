@@ -463,37 +463,76 @@ class _AcademicExportPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Card(
+      clipBehavior: Clip.antiAlias,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(
               children: [
-                Icon(
-                  Icons.table_view_outlined,
-                  color: Theme.of(context).colorScheme.primary,
+                _PanelIcon(
+                  icon: Icons.inventory_2_outlined,
+                  color: scheme.tertiary,
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 12),
                 Expanded(
-                  child: Text(
-                    'Template dan Export Data',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Pusat Template dan Ekspor',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'Workbook lengkap, template per data, dan export CSV tersedia dalam satu grid.',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
+                ),
+                FilledButton.icon(
+                  onPressed: () =>
+                      _saveFullXlsxTemplate(context, service: service),
+                  icon: const Icon(Icons.dataset_outlined),
+                  label: const Text('Workbook Master'),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                for (final type in AcademicExportType.values)
-                  _ExportActionGroup(type: type, service: service),
-              ],
+            const SizedBox(height: 18),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final width = constraints.maxWidth;
+                final columns = width >= 1280
+                    ? 4
+                    : width >= 920
+                    ? 3
+                    : width >= 620
+                    ? 2
+                    : 1;
+                return GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: AcademicExportType.values.length,
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: columns,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    mainAxisExtent: 150,
+                  ),
+                  itemBuilder: (context, index) => _ExportResourceCard(
+                    type: AcademicExportType.values[index],
+                    service: service,
+                  ),
+                );
+              },
             ),
           ],
         ),
@@ -502,37 +541,86 @@ class _AcademicExportPanel extends StatelessWidget {
   }
 }
 
-class _ExportActionGroup extends StatelessWidget {
-  const _ExportActionGroup({required this.type, required this.service});
+class _ExportResourceCard extends StatelessWidget {
+  const _ExportResourceCard({required this.type, required this.service});
 
   final AcademicExportType type;
   final MockService service;
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        OutlinedButton.icon(
-          onPressed: () => _saveCsv(
-            context,
-            fileName: type.fileName,
-            contents: service.academicCsvTemplate(type),
-          ),
-          icon: const Icon(Icons.description_outlined),
-          label: Text('Template ${type.label}'),
+    final scheme = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                _SmallBadge(icon: _typeIcon(type), color: scheme.primary),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    type.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const Spacer(),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _saveXlsxTemplate(
+                      context,
+                      service: service,
+                      type: type,
+                    ),
+                    icon: const Icon(Icons.table_chart_outlined, size: 18),
+                    label: const Text('XLSX'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _saveCsv(
+                      context,
+                      fileName: type.fileName,
+                      contents: service.academicCsvTemplate(type),
+                    ),
+                    icon: const Icon(Icons.description_outlined, size: 18),
+                    label: const Text('CSV'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.tonalIcon(
+                onPressed: () => _saveCsv(
+                  context,
+                  fileName: 'export_${type.fileName}',
+                  contents: service.exportAcademicCsv(type),
+                ),
+                icon: const Icon(Icons.download_outlined, size: 18),
+                label: const Text('Export Data'),
+              ),
+            ),
+          ],
         ),
-        FilledButton.tonalIcon(
-          onPressed: () => _saveCsv(
-            context,
-            fileName: 'export_${type.fileName}',
-            contents: service.exportAcademicCsv(type),
-          ),
-          icon: const Icon(Icons.download_outlined),
-          label: Text('Export ${type.label}'),
-        ),
-      ],
+      ),
     );
   }
 }
@@ -598,10 +686,96 @@ class ImportExportDataView extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          _ImportExportHero(service: service),
+          const SizedBox(height: 14),
           _AcademicImportPanel(service: service),
           const SizedBox(height: 14),
           _AcademicExportPanel(service: service),
         ],
+      ),
+    );
+  }
+}
+
+class _ImportExportHero extends StatelessWidget {
+  const _ImportExportHero({required this.service});
+
+  final MockService service;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: scheme.primaryContainer.withValues(alpha: 0.45),
+          border: Border(left: BorderSide(color: scheme.primary, width: 5)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(22),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final stats = Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  _HeroStat(
+                    label: 'Sheet master',
+                    value: '${AcademicExportType.values.length}',
+                    icon: Icons.dataset_outlined,
+                  ),
+                  _HeroStat(
+                    label: 'Format aktif',
+                    value: 'XLSX + CSV',
+                    icon: Icons.table_chart_outlined,
+                  ),
+                  _HeroStat(
+                    label: 'Audit log',
+                    value: '${service.activityLogs.length}',
+                    icon: Icons.manage_history_outlined,
+                  ),
+                ],
+              );
+              final title = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _HeroLabel(
+                    icon: Icons.auto_awesome_outlined,
+                    text: 'Academic Data Pipeline',
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Import dan Export Data',
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Kelola template, upload workbook multi-sheet, preview validasi, dan simpan data akademik dari satu ruang kerja.',
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              );
+              if (constraints.maxWidth < 860) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [title, const SizedBox(height: 18), stats],
+                );
+              }
+              return Row(
+                children: [
+                  Expanded(child: title),
+                  const SizedBox(width: 20),
+                  stats,
+                ],
+              );
+            },
+          ),
+        ),
       ),
     );
   }
@@ -618,85 +792,107 @@ class _AcademicImportPanel extends StatefulWidget {
 
 class _AcademicImportPanelState extends State<_AcademicImportPanel> {
   AcademicExportType _type = AcademicExportType.mahasiswa;
+  AcademicImportMode _mode = AcademicImportMode.createOnly;
   String? _selectedFileName;
-  List<Map<String, String>> _rows = const [];
+  Map<AcademicExportType, List<Map<String, String>>> _workbookRows = const {};
+  AcademicImportPreview? _preview;
   List<String> _parseErrors = const [];
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final canImport = _preview?.canImport == true;
     return Card(
+      clipBehavior: Clip.antiAlias,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  Icons.upload_file_outlined,
-                  color: Theme.of(context).colorScheme.primary,
+                _PanelIcon(
+                  icon: Icons.cloud_upload_outlined,
+                  color: scheme.primary,
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 12),
                 Expanded(
-                  child: Text(
-                    'Import CSV/XLSX',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w900,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Import Workbench',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Pilih sumber, cek mode import, validasi workbook, lalu simpan saat semua data siap.',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
+                FilledButton.icon(
+                  onPressed: canImport ? _importPreview : null,
+                  icon: const Icon(Icons.verified_outlined),
+                  label: const Text('Simpan Import'),
+                ),
               ],
             ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<AcademicExportType>(
-              initialValue: _type,
-              decoration: const InputDecoration(labelText: 'Jenis Data'),
-              items: [
-                for (final type in AcademicExportType.values)
-                  DropdownMenuItem(value: type, child: Text(type.label)),
-              ],
-              onChanged: (value) {
-                if (value == null) return;
-                setState(() {
-                  _type = value;
-                  _selectedFileName = null;
-                  _rows = const [];
-                  _parseErrors = const [];
-                });
+            const SizedBox(height: 18),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final wide = constraints.maxWidth >= 980;
+                final config = _ImportConfigPanel(
+                  selectedType: _type,
+                  mode: _mode,
+                  selectedFileName: _selectedFileName,
+                  parseErrors: _parseErrors,
+                  onTypeChanged: (value) {
+                    if (value == null) return;
+                    setState(() {
+                      _type = value;
+                      _selectedFileName = null;
+                      _workbookRows = const {};
+                      _preview = null;
+                      _parseErrors = const [];
+                    });
+                  },
+                  onModeChanged: (value) {
+                    if (value == null) return;
+                    setState(() => _mode = value);
+                    _refreshPreview();
+                  },
+                  onPickFile: _pickImportFile,
+                );
+                final validation = _ValidationPanel(
+                  preview: _preview,
+                  onShowErrors: _showPreviewErrors,
+                );
+                if (!wide) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [config, const SizedBox(height: 12), validation],
+                  );
+                }
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(flex: 5, child: config),
+                    const SizedBox(width: 12),
+                    Expanded(flex: 4, child: validation),
+                  ],
+                );
               },
             ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                OutlinedButton.icon(
-                  onPressed: _pickImportFile,
-                  icon: const Icon(Icons.file_open_outlined),
-                  label: const Text('Pilih File'),
-                ),
-                FilledButton.icon(
-                  onPressed: _rows.isEmpty ? null : _importRows,
-                  icon: const Icon(Icons.cloud_upload_outlined),
-                  label: Text('Import ${_rows.length} Baris'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(
-              _selectedFileName == null
-                  ? 'Gunakan template dari panel export agar urutan kolom sesuai.'
-                  : 'File: $_selectedFileName - ${_rows.length} baris siap diimport',
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-            if (_parseErrors.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text(
-                _parseErrors.take(3).join('\n'),
-                style: TextStyle(color: Theme.of(context).colorScheme.error),
-              ),
+            if (_preview != null) ...[
+              const SizedBox(height: 16),
+              _ImportPreviewTable(preview: _preview!),
             ],
           ],
         ),
@@ -714,29 +910,44 @@ class _AcademicImportPanelState extends State<_AcademicImportPanel> {
 
     final file = result.files.single;
     try {
-      final rows = _rowsFromImportFile(file);
+      final rows = _workbookRowsFromImportFile(file, selectedType: _type);
+      final preview = widget.service.previewAcademicWorkbook(rows, mode: _mode);
       setState(() {
         _selectedFileName = file.name;
-        _rows = rows;
+        _workbookRows = rows;
+        _preview = preview;
         _parseErrors = const [];
       });
     } on StateError catch (error) {
       setState(() {
         _selectedFileName = file.name;
-        _rows = const [];
+        _workbookRows = const {};
+        _preview = null;
         _parseErrors = [error.message];
       });
     } catch (error) {
       setState(() {
         _selectedFileName = file.name;
-        _rows = const [];
+        _workbookRows = const {};
+        _preview = null;
         _parseErrors = ['$error'];
       });
     }
   }
 
-  void _importRows() {
-    final result = widget.service.importAcademicRows(_type, _rows);
+  void _refreshPreview() {
+    if (_workbookRows.isEmpty) return;
+    final preview = widget.service.previewAcademicWorkbook(
+      _workbookRows,
+      mode: _mode,
+    );
+    setState(() => _preview = preview);
+  }
+
+  void _importPreview() {
+    final preview = _preview;
+    if (preview == null) return;
+    final result = widget.service.importAcademicPreview(preview);
     showAppMessage(context, result.message);
     if (result.errors.isNotEmpty) {
       showDialog<void>(
@@ -763,9 +974,798 @@ class _AcademicImportPanelState extends State<_AcademicImportPanel> {
     }
     setState(() {
       _selectedFileName = null;
-      _rows = const [];
+      _workbookRows = const {};
+      _preview = null;
       _parseErrors = const [];
     });
+  }
+
+  void _showPreviewErrors() {
+    final preview = _preview;
+    if (preview == null) return;
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Detail Error Import'),
+        content: SizedBox(
+          width: 620,
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: preview.errorMessages.length,
+            separatorBuilder: (_, _) => const Divider(height: 1),
+            itemBuilder: (context, index) => Text(preview.errorMessages[index]),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Tutup'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ImportConfigPanel extends StatelessWidget {
+  const _ImportConfigPanel({
+    required this.selectedType,
+    required this.mode,
+    required this.selectedFileName,
+    required this.parseErrors,
+    required this.onTypeChanged,
+    required this.onModeChanged,
+    required this.onPickFile,
+  });
+
+  final AcademicExportType selectedType;
+  final AcademicImportMode mode;
+  final String? selectedFileName;
+  final List<String> parseErrors;
+  final ValueChanged<AcademicExportType?> onTypeChanged;
+  final ValueChanged<AcademicImportMode?> onModeChanged;
+  final VoidCallback onPickFile;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: const [
+                _StepChip(number: '1', text: 'Pilih data'),
+                _StepChip(number: '2', text: 'Mode import'),
+                _StepChip(number: '3', text: 'Upload dan validasi'),
+              ],
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<AcademicExportType>(
+              initialValue: selectedType,
+              decoration: const InputDecoration(
+                labelText: 'Jenis Data',
+                prefixIcon: Icon(Icons.category_outlined),
+              ),
+              items: [
+                for (final type in AcademicExportType.values)
+                  DropdownMenuItem(value: type, child: Text(type.label)),
+              ],
+              onChanged: onTypeChanged,
+            ),
+            const SizedBox(height: 12),
+            SegmentedButton<AcademicImportMode>(
+              segments: [
+                for (final item in AcademicImportMode.values)
+                  ButtonSegment(
+                    value: item,
+                    icon: Icon(
+                      item == AcademicImportMode.createOnly
+                          ? Icons.add_circle_outline
+                          : Icons.sync_alt_outlined,
+                    ),
+                    label: Text(item.label),
+                  ),
+              ],
+              selected: {mode},
+              onSelectionChanged: (value) => onModeChanged(value.first),
+            ),
+            const SizedBox(height: 14),
+            _UploadZone(
+              fileName: selectedFileName,
+              hasError: parseErrors.isNotEmpty,
+              onPickFile: onPickFile,
+            ),
+            if (parseErrors.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  color: scheme.errorContainer.withValues(alpha: 0.4),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: scheme.error.withValues(alpha: 0.35),
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Text(
+                    parseErrors.take(3).join('\n'),
+                    style: TextStyle(color: scheme.onErrorContainer),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ValidationPanel extends StatelessWidget {
+  const _ValidationPanel({required this.preview, required this.onShowErrors});
+
+  final AcademicImportPreview? preview;
+  final VoidCallback onShowErrors;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final preview = this.preview;
+    final ready = preview?.canImport == true;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: ready
+            ? scheme.primaryContainer.withValues(alpha: 0.25)
+            : scheme.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: ready
+              ? scheme.primary.withValues(alpha: 0.35)
+              : scheme.outlineVariant,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                _SmallBadge(
+                  icon: ready
+                      ? Icons.verified_outlined
+                      : Icons.rule_folder_outlined,
+                  color: ready ? scheme.primary : scheme.outline,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    preview == null
+                        ? 'Menunggu file'
+                        : ready
+                        ? 'Siap disimpan'
+                        : 'Perlu diperbaiki',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                if (preview != null && preview.errors > 0)
+                  TextButton.icon(
+                    onPressed: onShowErrors,
+                    icon: const Icon(Icons.report_problem_outlined, size: 18),
+                    label: Text('${preview.errors} error'),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              preview == null
+                  ? 'Upload file CSV/XLSX untuk melihat hasil validasi sebelum data masuk ke sistem.'
+                  : ready
+                  ? 'Semua validasi fatal lolos. Data baru dan update akan mengikuti mode import yang dipilih.'
+                  : 'Sistem menemukan error pada workbook. Buka detail error, perbaiki file, lalu upload ulang.',
+              style: TextStyle(color: scheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: 14),
+            if (preview == null)
+              const _EmptyValidationState()
+            else
+              _ImportPreviewSummary(preview: preview),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _UploadZone extends StatelessWidget {
+  const _UploadZone({
+    required this.fileName,
+    required this.hasError,
+    required this.onPickFile,
+  });
+
+  final String? fileName;
+  final bool hasError;
+  final VoidCallback onPickFile;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final color = hasError ? scheme.error : scheme.primary;
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: onPickFile,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: color.withValues(alpha: 0.35)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              _SmallBadge(icon: Icons.file_open_outlined, color: color),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      fileName ?? 'Pilih file untuk divalidasi',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      fileName == null
+                          ? 'Mendukung workbook XLSX multi-sheet dan CSV lama.'
+                          : 'Klik untuk mengganti file import.',
+                      style: TextStyle(color: scheme.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              OutlinedButton.icon(
+                onPressed: onPickFile,
+                icon: const Icon(Icons.upload_file_outlined),
+                label: const Text('Browse'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyValidationState extends StatelessWidget {
+  const _EmptyValidationState();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _MetricPill(
+          label: 'Valid',
+          value: '-',
+          icon: Icons.check_circle_outline,
+          color: scheme.outline,
+        ),
+        const SizedBox(height: 8),
+        _MetricPill(
+          label: 'Error',
+          value: '-',
+          icon: Icons.error_outline,
+          color: scheme.outline,
+        ),
+        const SizedBox(height: 8),
+        _MetricPill(
+          label: 'Dibuat / Update',
+          value: '-',
+          icon: Icons.sync_outlined,
+          color: scheme.outline,
+        ),
+      ],
+    );
+  }
+}
+
+class _ImportPreviewSummary extends StatelessWidget {
+  const _ImportPreviewSummary({required this.preview});
+
+  final AcademicImportPreview preview;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _MetricPill(
+          label: 'Baris Valid',
+          value: '${preview.validRows}',
+          icon: Icons.check_circle_outline,
+          color: scheme.primary,
+        ),
+        const SizedBox(height: 8),
+        _MetricPill(
+          label: 'Baris Error',
+          value: '${preview.errors}',
+          icon: Icons.error_outline,
+          color: preview.errors == 0 ? scheme.primary : scheme.error,
+        ),
+        const SizedBox(height: 8),
+        _MetricPill(
+          label: 'Dibuat',
+          value: '${preview.created}',
+          icon: Icons.add_circle_outline,
+          color: scheme.tertiary,
+        ),
+        const SizedBox(height: 8),
+        _MetricPill(
+          label: 'Diperbarui',
+          value: '${preview.updated}',
+          icon: Icons.update_outlined,
+          color: scheme.secondary,
+        ),
+        const SizedBox(height: 8),
+        _MetricPill(
+          label: 'Dilewati',
+          value: '${preview.skipped}',
+          icon: Icons.block_outlined,
+          color: scheme.outline,
+        ),
+      ],
+    );
+  }
+}
+
+class _ImportPreviewTable extends StatelessWidget {
+  const _ImportPreviewTable({required this.preview});
+
+  final AcademicImportPreview preview;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final rows = preview.rows.take(12).toList();
+    if (rows.isEmpty) {
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          color: scheme.surface,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: scheme.outlineVariant),
+        ),
+        child: const Padding(
+          padding: EdgeInsets.all(16),
+          child: Text('Belum ada baris untuk dipreview.'),
+        ),
+      );
+    }
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
+            child: Row(
+              children: [
+                _SmallBadge(
+                  icon: Icons.preview_outlined,
+                  color: scheme.primary,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Preview Validasi',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                Text(
+                  '${rows.length} dari ${preview.rows.length} baris',
+                  style: TextStyle(color: scheme.onSurfaceVariant),
+                ),
+              ],
+            ),
+          ),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              headingRowColor: WidgetStatePropertyAll(
+                scheme.surfaceContainerHighest.withValues(alpha: 0.55),
+              ),
+              columns: const [
+                DataColumn(label: Text('Sheet')),
+                DataColumn(label: Text('Baris')),
+                DataColumn(label: Text('Aksi')),
+                DataColumn(label: Text('Status')),
+                DataColumn(label: Text('Data / Error')),
+              ],
+              rows: [
+                for (final row in rows)
+                  DataRow(
+                    cells: [
+                      DataCell(Text(row.sheetName)),
+                      DataCell(Text('${row.rowNumber}')),
+                      DataCell(
+                        _TinyStatusChip(
+                          label: _actionLabel(row.action),
+                          icon: _actionIcon(row.action),
+                          color: _actionColor(context, row.action),
+                        ),
+                      ),
+                      DataCell(
+                        _TinyStatusChip(
+                          label: row.hasError ? 'Error' : 'Valid',
+                          icon: row.hasError
+                              ? Icons.error_outline
+                              : Icons.check_circle_outline,
+                          color: row.hasError ? scheme.error : scheme.primary,
+                        ),
+                      ),
+                      DataCell(
+                        SizedBox(
+                          width: 360,
+                          child: Text(
+                            row.hasError
+                                ? row.error!
+                                : row.row.entries
+                                      .take(5)
+                                      .map(
+                                        (entry) =>
+                                            '${entry.key}: ${entry.value}',
+                                      )
+                                      .join(', '),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _actionLabel(AcademicImportAction action) {
+    switch (action) {
+      case AcademicImportAction.created:
+        return 'Buat';
+      case AcademicImportAction.updated:
+        return 'Update';
+      case AcademicImportAction.skipped:
+        return 'Lewati';
+    }
+  }
+
+  static IconData _actionIcon(AcademicImportAction action) {
+    switch (action) {
+      case AcademicImportAction.created:
+        return Icons.add_circle_outline;
+      case AcademicImportAction.updated:
+        return Icons.update_outlined;
+      case AcademicImportAction.skipped:
+        return Icons.block_outlined;
+    }
+  }
+
+  static Color _actionColor(BuildContext context, AcademicImportAction action) {
+    final scheme = Theme.of(context).colorScheme;
+    switch (action) {
+      case AcademicImportAction.created:
+        return scheme.tertiary;
+      case AcademicImportAction.updated:
+        return scheme.secondary;
+      case AcademicImportAction.skipped:
+        return scheme.outline;
+    }
+  }
+}
+
+class _PanelIcon extends StatelessWidget {
+  const _PanelIcon({required this.icon, required this.color});
+
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: SizedBox(width: 44, height: 44, child: Icon(icon, color: color)),
+    );
+  }
+}
+
+class _SmallBadge extends StatelessWidget {
+  const _SmallBadge({required this.icon, required this.color});
+
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: SizedBox(
+        width: 34,
+        height: 34,
+        child: Icon(icon, color: color, size: 20),
+      ),
+    );
+  }
+}
+
+class _HeroLabel extends StatelessWidget {
+  const _HeroLabel({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: scheme.surface.withValues(alpha: 0.7),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: scheme.primary),
+            const SizedBox(width: 6),
+            Text(
+              text,
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: scheme.primary,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HeroStat extends StatelessWidget {
+  const _HeroStat({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: scheme.surface.withValues(alpha: 0.82),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: SizedBox(
+        width: 150,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, color: scheme.primary, size: 20),
+              const SizedBox(height: 8),
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+              ),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: scheme.onSurfaceVariant),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MetricPill extends StatelessWidget {
+  const _MetricPill({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(color: scheme.onSurfaceVariant),
+              ),
+            ),
+            Text(
+              value,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w900,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StepChip extends StatelessWidget {
+  const _StepChip({required this.number, required this.text});
+
+  final String number;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircleAvatar(
+              radius: 10,
+              backgroundColor: scheme.primary,
+              child: Text(
+                number,
+                style: TextStyle(
+                  color: scheme.onPrimary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              text,
+              style: Theme.of(
+                context,
+              ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TinyStatusChip extends StatelessWidget {
+  const _TinyStatusChip({
+    required this.label,
+    required this.icon,
+    required this.color,
+  });
+
+  final String label;
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.09),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 15, color: color),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: TextStyle(color: color, fontWeight: FontWeight.w800),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+IconData _typeIcon(AcademicExportType type) {
+  switch (type) {
+    case AcademicExportType.fakultas:
+      return Icons.account_balance_outlined;
+    case AcademicExportType.prodi:
+      return Icons.school_outlined;
+    case AcademicExportType.ruangan:
+      return Icons.meeting_room_outlined;
+    case AcademicExportType.dosen:
+      return Icons.badge_outlined;
+    case AcademicExportType.mahasiswa:
+      return Icons.groups_outlined;
+    case AcademicExportType.mataKuliah:
+      return Icons.menu_book_outlined;
+    case AcademicExportType.kelas:
+      return Icons.event_seat_outlined;
+    case AcademicExportType.nilai:
+      return Icons.fact_check_outlined;
   }
 }
 
@@ -788,28 +1788,134 @@ Future<void> _saveCsv(
   }
 }
 
-List<Map<String, String>> _rowsFromImportFile(PlatformFile file) {
+Future<void> _saveXlsxTemplate(
+  BuildContext context, {
+  required MockService service,
+  required AcademicExportType type,
+}) async {
+  final bytes = _xlsxBytes({
+    type.sheetName: [service.academicXlsxTemplate(type)],
+  });
+  await _saveXlsxBytes(
+    context,
+    fileName: type.fileName.replaceAll('.csv', '.xlsx'),
+    bytes: bytes,
+  );
+}
+
+Future<void> _saveFullXlsxTemplate(
+  BuildContext context, {
+  required MockService service,
+}) async {
+  final sheets = <String, List<List<String>>>{
+    'Petunjuk': [
+      ['Urutan Import'],
+      ['1. Fakultas'],
+      ['2. Prodi'],
+      ['3. Ruangan'],
+      ['4. Dosen'],
+      ['5. Mahasiswa'],
+      ['6. MataKuliah'],
+      ['7. Kelas'],
+      ['8. Nilai'],
+      ['Catatan'],
+      ['Gunakan dosenIds dipisah koma, contoh d-01,d-02'],
+    ],
+    for (final entry in service.academicFullWorkbookTemplate().entries)
+      entry.key.sheetName: [entry.value],
+  };
+  await _saveXlsxBytes(
+    context,
+    fileName: 'template_master_akademik.xlsx',
+    bytes: _xlsxBytes(sheets),
+  );
+}
+
+Uint8List _xlsxBytes(Map<String, List<List<String>>> sheets) {
+  final workbook = xlsx.Excel.createExcel();
+  for (final entry in sheets.entries) {
+    final sheet = workbook[entry.key];
+    for (final row in entry.value) {
+      sheet.appendRow([for (final cell in row) xlsx.TextCellValue(cell)]);
+    }
+  }
+  if (workbook.tables.containsKey('Sheet1') && !sheets.containsKey('Sheet1')) {
+    workbook.delete('Sheet1');
+  }
+  return Uint8List.fromList(workbook.encode() ?? const []);
+}
+
+Future<void> _saveXlsxBytes(
+  BuildContext context, {
+  required String fileName,
+  required Uint8List bytes,
+}) async {
+  final savedPath = await FilePicker.saveFile(
+    dialogTitle: 'Simpan $fileName',
+    fileName: fileName,
+    type: FileType.custom,
+    allowedExtensions: const ['xlsx'],
+    bytes: bytes,
+  );
+  await writeCsvFile(savedPath, bytes);
+  if (context.mounted && savedPath != null) {
+    showAppMessage(context, 'File berhasil disimpan: $fileName');
+  }
+}
+
+Map<AcademicExportType, List<Map<String, String>>> _workbookRowsFromImportFile(
+  PlatformFile file, {
+  required AcademicExportType selectedType,
+}) {
   final bytes = file.bytes;
   if (bytes == null || bytes.isEmpty) {
     throw StateError('File tidak dapat dibaca');
   }
   final extension = file.extension?.toLowerCase();
-  final rawRows = switch (extension) {
-    'csv' => _parseCsvRows(utf8.decode(bytes)),
-    'xlsx' => _parseXlsxRows(bytes),
+  return switch (extension) {
+    'csv' => {selectedType: _rowsFromTable(_parseCsvRows(utf8.decode(bytes)))},
+    'xlsx' => _parseXlsxWorkbookRows(bytes, selectedType: selectedType),
     _ => throw StateError('Format file harus CSV atau XLSX'),
   };
-  return _rowsFromTable(rawRows);
 }
 
-List<List<String>> _parseXlsxRows(Uint8List bytes) {
+Map<AcademicExportType, List<Map<String, String>>> _parseXlsxWorkbookRows(
+  Uint8List bytes, {
+  required AcademicExportType selectedType,
+}) {
   final workbook = xlsx.Excel.decodeBytes(bytes);
   if (workbook.tables.isEmpty) throw StateError('Workbook XLSX kosong');
-  final sheet = workbook.tables.values.first;
-  return [
-    for (final row in sheet.rows)
-      [for (final cell in row) cell?.value.toString().trim() ?? ''],
-  ];
+  final result = <AcademicExportType, List<Map<String, String>>>{};
+  for (final type in AcademicExportType.values) {
+    final sheet = _sheetByNormalizedName(workbook, type.sheetName);
+    if (sheet == null) continue;
+    final rows = _rowsFromTable([
+      for (final row in sheet.rows)
+        [for (final cell in row) cell?.value.toString().trim() ?? ''],
+    ]);
+    if (rows.isNotEmpty) result[type] = rows;
+  }
+  if (result.isNotEmpty) return result;
+
+  final selectedSheet = workbook.tables.values.first;
+  return {
+    selectedType: _rowsFromTable([
+      for (final row in selectedSheet.rows)
+        [for (final cell in row) cell?.value.toString().trim() ?? ''],
+    ]),
+  };
+}
+
+xlsx.Sheet? _sheetByNormalizedName(xlsx.Excel workbook, String name) {
+  final normalized = _normalizeSheetName(name);
+  for (final entry in workbook.tables.entries) {
+    if (_normalizeSheetName(entry.key) == normalized) return entry.value;
+  }
+  return null;
+}
+
+String _normalizeSheetName(String value) {
+  return value.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
 }
 
 List<List<String>> _parseCsvRows(String source) {

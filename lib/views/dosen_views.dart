@@ -14,6 +14,7 @@ import '../viewmodels/theme_viewmodel.dart';
 import '../widgets/animated_entrance.dart';
 import '../widgets/app_scaffold.dart';
 import '../widgets/menu_tile.dart';
+import '../widgets/presensi_rekap_table.dart';
 
 class DosenDashboardView extends StatelessWidget {
   const DosenDashboardView({
@@ -934,7 +935,17 @@ class DosenInputNilaiKelasView extends StatelessWidget {
     return AppScaffold(
       title: 'Input Nilai: ${service.getMataKuliahName(kelas.mataKuliahId)}',
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: () => Navigator.of(context).pop(),
+              icon: const Icon(Icons.arrow_back_rounded),
+              label: const Text('Kembali'),
+            ),
+          ),
+          const SizedBox(height: 12),
           if (krs.isEmpty)
             const Padding(
               padding: EdgeInsets.all(24.0),
@@ -1092,13 +1103,14 @@ class DosenKrsValidationView extends StatelessWidget {
             }
             return b.semester.compareTo(a.semester);
           });
+    final krsGroups = _KrsValidationGroup.fromItems(krsList);
 
     return AppScaffold(
       title: 'Validasi KRS',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (krsList.isEmpty)
+          if (krsGroups.isEmpty)
             const _DosenEmptyState(
               icon: Icons.playlist_add_check_rounded,
               title: 'Belum ada KRS',
@@ -1106,52 +1118,21 @@ class DosenKrsValidationView extends StatelessWidget {
                   'Pengajuan KRS mahasiswa bimbingan akademik Anda akan tampil di sini.',
             )
           else
-            for (int i = 0; i < krsList.length; i++)
+            for (int i = 0; i < krsGroups.length; i++)
               AnimatedEntrance(
                 delay: Duration(milliseconds: i * 70),
-                child: Builder(
-                  builder: (context) {
-                    final krs = krsList[i];
-                    final kelas = service.kelas.firstWhere(
-                      (item) => item.id == krs.kelasId,
-                    );
-                    return InfoTile(
-                      icon: switch (krs.status) {
-                        KrsStatus.disetujui => Icons.verified_rounded,
-                        KrsStatus.ditolak => Icons.cancel_outlined,
-                        KrsStatus.diajukan => Icons.pending_actions_rounded,
-                        KrsStatus.draft => Icons.edit_note_outlined,
-                      },
-                      title: service.getMahasiswaName(krs.mahasiswaId),
-                      subtitle:
-                          '${service.getMataKuliahName(kelas.mataKuliahId)}\nNIM: ${krs.mahasiswaId} - Semester ${krs.semester}\nDosen pengajar: ${service.getDosenPengajarNames(kelas.id)}\nRuangan: ${service.getRuanganName(kelas.ruangan)}${krs.catatanDosenPa.isEmpty ? '' : '\nCatatan: ${krs.catatanDosenPa}'}',
-                      trailing: krs.isValidated || krs.isRejected
-                          ? Text(
-                              krs.statusLabel,
-                              style: TextStyle(fontWeight: FontWeight.w900),
-                            )
-                          : PopupMenuButton<String>(
-                              onSelected: (value) {
-                                if (value == 'approve') {
-                                  krsVm.validate(krs.id, dosenId);
-                                  showAppMessage(context, krsVm.message);
-                                  return;
-                                }
-                                _showRejectKrsDialog(context, krs.id, krsVm);
-                              },
-                              itemBuilder: (context) => const [
-                                PopupMenuItem(
-                                  value: 'approve',
-                                  child: Text('Setujui KRS'),
-                                ),
-                                PopupMenuItem(
-                                  value: 'reject',
-                                  child: Text('Tolak dengan Catatan'),
-                                ),
-                              ],
-                            ),
-                    );
+                child: _KrsValidationCard(
+                  group: krsGroups[i],
+                  service: service,
+                  onApprove: () {
+                    krsVm.validate(krsGroups[i].items.first.id, dosenId);
+                    showAppMessage(context, krsVm.message);
                   },
+                  onReject: () => _showRejectKrsDialog(
+                    context,
+                    krsGroups[i].items.first.id,
+                    krsVm,
+                  ),
                 ),
               ),
         ],
@@ -1197,6 +1178,472 @@ class DosenKrsValidationView extends StatelessWidget {
       },
     );
     controller.dispose();
+  }
+}
+
+class _KrsValidationCard extends StatefulWidget {
+  const _KrsValidationCard({
+    required this.group,
+    required this.service,
+    required this.onApprove,
+    required this.onReject,
+  });
+
+  final _KrsValidationGroup group;
+  final MockService service;
+  final VoidCallback onApprove;
+  final VoidCallback onReject;
+
+  @override
+  State<_KrsValidationCard> createState() => _KrsValidationCardState();
+}
+
+class _KrsValidationCardState extends State<_KrsValidationCard> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final group = widget.group;
+    final courses = _KrsCourseSummary.fromGroup(widget.service, group);
+    final totalSks = courses.fold<int>(0, (sum, item) => sum + item.sks);
+    final statusColor = _statusColor(scheme, group.status);
+    final catatan = group.items
+        .map((item) => item.catatanDosenPa)
+        .where((item) => item.isNotEmpty)
+        .toSet()
+        .join('\n');
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Card(
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: _toggleExpanded,
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: statusColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        _statusIcon(group.status),
+                        color: statusColor,
+                        size: 26,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Wrap(
+                            spacing: 10,
+                            runSpacing: 8,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              Text(
+                                widget.service.getMahasiswaName(
+                                  group.mahasiswaId,
+                                ),
+                                style: textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              _KrsStatusChip(
+                                label: group.status.label,
+                                color: statusColor,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              _KrsSummaryPill(
+                                icon: Icons.badge_outlined,
+                                label: group.mahasiswaId,
+                              ),
+                              _KrsSummaryPill(
+                                icon: Icons.school_outlined,
+                                label: 'Semester ${group.semester}',
+                              ),
+                              _KrsSummaryPill(
+                                icon: Icons.menu_book_outlined,
+                                label: '${courses.length} matkul',
+                              ),
+                              _KrsSummaryPill(
+                                icon: Icons.numbers_outlined,
+                                label: '$totalSks SKS',
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Tooltip(
+                          message: _expanded
+                              ? 'Sembunyikan isi KRS'
+                              : 'Tampilkan isi KRS',
+                          child: IconButton.filledTonal(
+                            onPressed: _toggleExpanded,
+                            icon: AnimatedRotation(
+                              duration: const Duration(milliseconds: 180),
+                              turns: _expanded ? 0.5 : 0,
+                              child: const Icon(Icons.expand_more_rounded),
+                            ),
+                          ),
+                        ),
+                        if (!group.isValidated && !group.isRejected)
+                          PopupMenuButton<String>(
+                            onSelected: (value) {
+                              if (value == 'approve') {
+                                widget.onApprove();
+                                return;
+                              }
+                              widget.onReject();
+                            },
+                            itemBuilder: (context) => const [
+                              PopupMenuItem(
+                                value: 'approve',
+                                child: Text('Setujui KRS'),
+                              ),
+                              PopupMenuItem(
+                                value: 'reject',
+                                child: Text('Tolak dengan Catatan'),
+                              ),
+                            ],
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+                AnimatedCrossFade(
+                  firstChild: const SizedBox.shrink(),
+                  secondChild: Padding(
+                    padding: const EdgeInsets.only(top: 18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Divider(color: scheme.outlineVariant, height: 1),
+                        const SizedBox(height: 14),
+                        for (int i = 0; i < courses.length; i++) ...[
+                          _KrsCourseRow(index: i + 1, course: courses[i]),
+                          if (i != courses.length - 1)
+                            Divider(
+                              color: scheme.outlineVariant.withValues(
+                                alpha: 0.75,
+                              ),
+                              height: 18,
+                            ),
+                        ],
+                        if (catatan.isNotEmpty) ...[
+                          const SizedBox(height: 14),
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: scheme.errorContainer.withValues(
+                                alpha: 0.35,
+                              ),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              'Catatan: $catatan',
+                              style: TextStyle(color: scheme.onSurfaceVariant),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  crossFadeState: _expanded
+                      ? CrossFadeState.showSecond
+                      : CrossFadeState.showFirst,
+                  duration: const Duration(milliseconds: 180),
+                  sizeCurve: Curves.easeOutCubic,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _toggleExpanded() {
+    setState(() => _expanded = !_expanded);
+  }
+
+  static IconData _statusIcon(KrsStatus status) {
+    return switch (status) {
+      KrsStatus.disetujui => Icons.verified_rounded,
+      KrsStatus.ditolak => Icons.cancel_outlined,
+      KrsStatus.diajukan => Icons.pending_actions_rounded,
+      KrsStatus.draft => Icons.edit_note_outlined,
+    };
+  }
+
+  static Color _statusColor(ColorScheme scheme, KrsStatus status) {
+    return switch (status) {
+      KrsStatus.disetujui => scheme.primary,
+      KrsStatus.ditolak => scheme.error,
+      KrsStatus.diajukan => scheme.tertiary,
+      KrsStatus.draft => scheme.outline,
+    };
+  }
+}
+
+class _KrsStatusChip extends StatelessWidget {
+  const _KrsStatusChip({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(color: color, fontWeight: FontWeight.w900),
+      ),
+    );
+  }
+}
+
+class _KrsSummaryPill extends StatelessWidget {
+  const _KrsSummaryPill({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: scheme.onSurfaceVariant),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: scheme.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _KrsCourseRow extends StatelessWidget {
+  const _KrsCourseRow({required this.index, required this.course});
+
+  final int index;
+  final _KrsCourseSummary course;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 28,
+          height: 28,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: scheme.primary.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            '$index',
+            style: TextStyle(
+              color: scheme.primary,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                course.name,
+                style: textTheme.bodyLarge?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 5),
+              Wrap(
+                spacing: 12,
+                runSpacing: 5,
+                children: [
+                  _KrsInlineMeta(
+                    icon: Icons.numbers_outlined,
+                    label: '${course.sks} SKS',
+                  ),
+                  _KrsInlineMeta(
+                    icon: Icons.person_outline,
+                    label: course.lecturers,
+                  ),
+                  _KrsInlineMeta(
+                    icon: Icons.meeting_room_outlined,
+                    label: course.room,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _KrsInlineMeta extends StatelessWidget {
+  const _KrsInlineMeta({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 16, color: scheme.onSurfaceVariant),
+        const SizedBox(width: 5),
+        Flexible(
+          child: Text(label, style: TextStyle(color: scheme.onSurfaceVariant)),
+        ),
+      ],
+    );
+  }
+}
+
+class _KrsCourseSummary {
+  const _KrsCourseSummary({
+    required this.name,
+    required this.sks,
+    required this.lecturers,
+    required this.room,
+  });
+
+  final String name;
+  final int sks;
+  final String lecturers;
+  final String room;
+
+  static List<_KrsCourseSummary> fromGroup(
+    MockService service,
+    _KrsValidationGroup group,
+  ) {
+    return [
+      for (final krs in group.items)
+        () {
+          final kelas = service.kelas.firstWhere(
+            (item) => item.id == krs.kelasId,
+          );
+          final mataKuliah = service.getMataKuliahByKode(kelas.mataKuliahId);
+          return _KrsCourseSummary(
+            name: service.getMataKuliahName(kelas.mataKuliahId),
+            sks: mataKuliah?.sks ?? 0,
+            lecturers: service.getDosenPengajarNames(kelas.id),
+            room: service.getRuanganName(kelas.ruangan),
+          );
+        }(),
+    ];
+  }
+}
+
+class _KrsValidationGroup {
+  const _KrsValidationGroup({
+    required this.mahasiswaId,
+    required this.semester,
+    required this.tahunAjaranId,
+    required this.items,
+  });
+
+  final String mahasiswaId;
+  final int semester;
+  final String tahunAjaranId;
+  final List<KRS> items;
+
+  KrsStatus get status {
+    if (items.any(
+      (item) => item.isSubmitted && !item.isValidated && !item.isRejected,
+    )) {
+      return KrsStatus.diajukan;
+    }
+    if (items.any((item) => item.isRejected)) return KrsStatus.ditolak;
+    if (items.every((item) => item.isValidated)) return KrsStatus.disetujui;
+    return KrsStatus.draft;
+  }
+
+  bool get isValidated => status == KrsStatus.disetujui;
+  bool get isRejected => status == KrsStatus.ditolak;
+
+  static List<_KrsValidationGroup> fromItems(List<KRS> items) {
+    final grouped = <String, List<KRS>>{};
+    for (final item in items) {
+      final key = '${item.mahasiswaId}|${item.semester}|${item.tahunAjaranId}';
+      (grouped[key] ??= []).add(item);
+    }
+
+    final groups = grouped.values.map((groupItems) {
+      groupItems.sort((a, b) => a.kelasId.compareTo(b.kelasId));
+      final first = groupItems.first;
+      return _KrsValidationGroup(
+        mahasiswaId: first.mahasiswaId,
+        semester: first.semester,
+        tahunAjaranId: first.tahunAjaranId,
+        items: List.unmodifiable(groupItems),
+      );
+    }).toList();
+
+    groups.sort((a, b) {
+      if (a.status != b.status) {
+        return a.status.index.compareTo(b.status.index);
+      }
+      final semesterOrder = b.semester.compareTo(a.semester);
+      if (semesterOrder != 0) return semesterOrder;
+      final mahasiswaOrder = a.mahasiswaId.compareTo(b.mahasiswaId);
+      if (mahasiswaOrder != 0) return mahasiswaOrder;
+      return a.tahunAjaranId.compareTo(b.tahunAjaranId);
+    });
+    return groups;
   }
 }
 
@@ -1875,6 +2322,10 @@ class _KelasPertemuanViewState extends State<KelasPertemuanView> {
         service.pertemuan.where((p) => p.kelasId == widget.kelasId).toList()
           ..sort((a, b) => a.pertemuanKe.compareTo(b.pertemuanKe));
     final mkName = service.getMataKuliahName(kelas.mataKuliahId);
+    final rekap = buildDosenPresensiRekap(
+      service: service,
+      dosenId: widget.dosenId,
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -1913,9 +2364,20 @@ class _KelasPertemuanViewState extends State<KelasPertemuanView> {
       ),
       body: ListView.builder(
         padding: const EdgeInsets.all(16),
-        itemCount: pertemuanList.length,
+        itemCount: pertemuanList.length + 1,
         itemBuilder: (context, index) {
-          final p = pertemuanList[index];
+          if (index == 0) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: PresensiRekapTable(
+                title: 'Rekap Presensi Dosen Semester Aktif',
+                subtitle: service.tahunAjaranAktif.label,
+                rows: rekap,
+              ),
+            );
+          }
+
+          final p = pertemuanList[index - 1];
           final isBelumMulai = p.status == StatusPertemuan.belumDimulai;
           final isBerlangsung = p.status == StatusPertemuan.berlangsung;
           final statusColor = isBelumMulai
